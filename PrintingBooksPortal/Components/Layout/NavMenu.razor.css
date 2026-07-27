@@ -1,0 +1,12 @@
+/*
+  INTENTIONALLY EMPTY.
+
+  All sidebar / nav styles live in wwwroot/app.css (the global stylesheet)
+  because Blazor CSS isolation scopes every rule in this file with a
+  [b-xxxxxxxx] attribute.  That attribute is NOT applied to elements rendered
+  inside <AuthorizeView> child content, so scoped rules like
+  `.sidebar .nav-link.active` never match those <a> tags.
+
+  Moving every sidebar rule to app.css (global, un-scoped) is the only
+  reliable fix.  See the "=== SIDEBAR NAVIGATION ===" section in app.css.
+*/

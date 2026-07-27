@@ -1,0 +1,745 @@
+(function () {
+    'use strict';
+
+    document.addEventListener('contextmenu', function (e) {
+        e.preventDefault();
+    });
+
+    document.addEventListener('keydown', function (e) {
+        var ctrl = e.ctrlKey || e.metaKey;
+        var key = (e.key || '').toLowerCase();
+        if (ctrl && (key === 's' || key === 'p')) { e.preventDefault(); e.stopPropagation(); return; }
+    }, true);
+
+    document.addEventListener('dragstart', function (e) {
+        if (e.target && typeof e.target.closest === 'function' && e.target.closest('.pdf-container')) e.preventDefault();
+    });
+    document.addEventListener('selectstart', function (e) {
+        if (e.target && typeof e.target.closest === 'function' && e.target.closest('.pdf-container')) e.preventDefault();
+    });
+
+    var pdfDoc = null;
+    var container = null;
+    var loadingEl = null;
+    var renderedPages = {};
+    var pendingRender = {};
+    var observer = null;
+    var currentScale = 1.5;
+
+    // Print settings state
+    var settings = {
+        printerName: '',
+        paperSize: 'A4',
+        orientation: 'portrait',
+        scalingMode: 'actual',
+        customScale: 100,
+        marginPreset: 'normal',
+        marginUnit: 'mm',
+        marginTop: 25.4,
+        marginBottom: 25.4,
+        marginLeft: 31.75,
+        marginRight: 31.75
+    };
+
+    // Display settings
+    var display = {
+        zoom: 100,
+        showPageStyle: 'single'
+    };
+
+    window.initPdfViewer = function (bookId) {
+        container = document.getElementById('pdfViewer');
+        loadingEl = document.getElementById('pdfLoading');
+        if (!container) return;
+
+        wireCopiesControls();
+        wireSettingsWidget();
+
+        loadPdfJs(function () {
+            loadSecurePdf(bookId);
+        });
+    };
+
+    function wireCopiesControls() {
+        var input = document.getElementById('copiesInput');
+        var inc = document.getElementById('copiesInc');
+        var dec = document.getElementById('copiesDec');
+        if (!input || !inc || !dec) return;
+
+        inc.addEventListener('click', function () {
+            var v = parseInt(input.value, 10) || 1;
+            if (v < 100) input.value = v + 1;
+        });
+        dec.addEventListener('click', function () {
+            var v = parseInt(input.value, 10) || 1;
+            if (v > 1) input.value = v - 1;
+        });
+        input.addEventListener('change', function () {
+            var v = parseInt(input.value, 10) || 1;
+            if (v < 1) v = 1;
+            if (v > 100) v = 100;
+            input.value = v;
+        });
+    }
+
+    function wireSettingsWidget() {
+        // ─── Toggle ───
+        var toggle = document.getElementById('settingsToggle');
+        var panel = document.getElementById('settingsPanel');
+        if (toggle && panel) {
+            toggle.addEventListener('click', function (e) {
+                e.stopPropagation();
+                panel.classList.toggle('open');
+            });
+            document.addEventListener('click', function (e) {
+                if (!document.getElementById('printSettingsGroup').contains(e.target)) {
+                    panel.classList.remove('open');
+                }
+            });
+        }
+
+        // ─── Printer ───
+        wirePrinterControls();
+
+        // ─── Page Setup ───
+        var paperSizeSelect = document.getElementById('paperSizeSelect');
+        var orientationSelect = document.getElementById('orientationSelect');
+        if (paperSizeSelect) {
+            paperSizeSelect.addEventListener('change', function () {
+                settings.paperSize = this.value;
+            });
+        }
+        if (orientationSelect) {
+            orientationSelect.addEventListener('change', function () {
+                settings.orientation = this.value;
+            });
+        }
+
+        // ─── Scaling ───
+        wireScalingControls();
+
+        // ─── Margins ───
+        wireMarginControls();
+
+        // ─── Display Zoom ───
+        wireZoomControls();
+
+        // Initial printer detect
+        detectPrinters();
+    }
+
+    // ══════════════════════════════════════
+    //  PRINTER CONTROLS
+    // ══════════════════════════════════════
+
+    function wirePrinterControls() {
+        var refreshBtn = document.getElementById('printerRefresh');
+        if (refreshBtn) {
+            refreshBtn.addEventListener('click', function () {
+                var svg = this.querySelector('svg');
+                if (svg) svg.classList.add('spinning');
+                detectPrinters(function () {
+                    if (svg) svg.classList.remove('spinning');
+                });
+            });
+        }
+    }
+
+    function detectPrinters(callback) {
+        callback = callback || function () { };
+        var select = document.getElementById('printerSelect');
+        var statusDot = document.getElementById('printerStatusDot');
+        var statusText = document.getElementById('printerStatusText');
+        if (!select) { callback(); return; }
+
+        function setOffline(msg) {
+            select.innerHTML = '<option value="">Select a printer…</option>';
+            if (statusDot) statusDot.className = 'printer-status-dot printer-status-offline';
+            if (statusText) {
+                statusText.textContent = msg || 'Agent not running';
+                statusText.className = 'printer-status-text offline';
+            }
+        }
+
+        function tryFetch(url) {
+            return fetch(url, { mode: 'cors', cache: 'no-cache' }).then(function (r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.json();
+            });
+        }
+
+        // Try localhost first, fallback to 127.0.0.1
+        var primary = 'http://localhost:8080/api/print-job/printers';
+        var fallback = 'http://127.0.0.1:8080/api/print-job/printers';
+
+        tryFetch(primary).then(function (data) {
+            onPrintersFetched(data);
+        }).catch(function (err1) {
+            console.warn('[PrintAgent] Primary fetch failed:', err1);
+            tryFetch(fallback).then(function (data) {
+                onPrintersFetched(data);
+            }).catch(function (err2) {
+                console.warn('[PrintAgent] Fallback fetch also failed:', err2);
+                // Try health endpoint to see if agent is running but printers endpoint is missing
+                tryFetch('http://localhost:8080/api/print-job/health').then(function () {
+                    setOffline('Agent detected — printers endpoint missing (old version)');
+                }).catch(function () {
+                    setOffline('Agent not running — double-click the desktop shortcut');
+                });
+            });
+        });
+
+        function onPrintersFetched(data) {
+            select.innerHTML = '<option value="">Select a printer…</option>';
+            var isDefaultSet = false;
+            if (data.printers && data.printers.length > 0) {
+                data.printers.forEach(function (p) {
+                    var opt = document.createElement('option');
+                    opt.value = p.name;
+                    var badge = '';
+                    switch ((p.connectionType || '').toLowerCase()) {
+                        case 'network': badge = '\uD83C\uDF10'; break;
+                        case 'usb': badge = '\uD83D\uDD0C'; break;
+                        case 'bluetooth': badge = '\uD83D\uDCF6'; break;
+                        case 'wifi': badge = '\uD83D\uDCE1'; break;
+                        default: badge = '\uD83D\uDDA8\uFE0F'; break;
+                    }
+                    opt.textContent = p.name + '  ' + badge + ' ' + (p.connectionType || 'Local');
+                    if (p.isDefault && !isDefaultSet) {
+                        opt.selected = true;
+                        settings.printerName = p.name;
+                        isDefaultSet = true;
+                    }
+                    select.appendChild(opt);
+                });
+            }
+            if (statusDot) statusDot.className = 'printer-status-dot printer-status-online';
+            if (statusText) {
+                statusText.textContent = 'Online \u2014 ' + data.printers.length + ' printer' + (data.printers.length !== 1 ? 's' : '') + ' found';
+                statusText.className = 'printer-status-text online';
+            }
+            callback();
+        }
+
+        // Add change listener for printer select
+        var printerSelect = document.getElementById('printerSelect');
+        if (printerSelect) {
+            printerSelect.addEventListener('change', function () {
+                settings.printerName = this.value;
+            });
+        }
+    }
+
+    // ══════════════════════════════════════
+    //  SCALING CONTROLS
+    // ══════════════════════════════════════
+
+    function wireScalingControls() {
+        var radios = document.querySelectorAll('input[name="scaling"]');
+        var customRow = document.getElementById('customScaleRow');
+        var slider = document.getElementById('customScaleSlider');
+        var input = document.getElementById('customScaleInput');
+
+        function toggleCustom(show) {
+            if (customRow) customRow.style.display = show ? 'flex' : 'none';
+        }
+
+        radios.forEach(function (radio) {
+            radio.addEventListener('change', function () {
+                settings.scalingMode = this.value;
+                toggleCustom(this.value === 'custom');
+                if (this.value !== 'custom' && slider && input) {
+                    settings.customScale = 100;
+                    slider.value = 100;
+                    if (input) input.value = 100;
+                }
+            });
+        });
+
+        if (slider && input) {
+            slider.addEventListener('input', function () {
+                var v = parseInt(this.value, 10);
+                input.value = v;
+                settings.customScale = v;
+            });
+            input.addEventListener('change', function () {
+                var v = parseInt(this.value, 10) || 100;
+                if (v < 10) v = 10;
+                if (v > 200) v = 200;
+                this.value = v;
+                slider.value = v;
+                settings.customScale = v;
+            });
+        }
+
+        toggleCustom(false);
+    }
+
+    // ══════════════════════════════════════
+    //  MARGIN CONTROLS
+    // ══════════════════════════════════════
+
+    function wireMarginControls() {
+        var marginBtns = document.querySelectorAll('.margin-btn');
+        var customGrid = document.getElementById('customMarginGrid');
+
+        function updateMarginPreset(preset) {
+            settings.marginPreset = preset;
+            switch (preset) {
+                case 'normal':
+                    settings.marginTop = 25.4;
+                    settings.marginBottom = 25.4;
+                    settings.marginLeft = 31.75;
+                    settings.marginRight = 31.75;
+                    break;
+                case 'narrow':
+                    settings.marginTop = 12.7;
+                    settings.marginBottom = 12.7;
+                    settings.marginLeft = 12.7;
+                    settings.marginRight = 12.7;
+                    break;
+                case 'custom':
+                    break;
+            }
+            if (preset !== 'custom') {
+                document.getElementById('marginTop').value = settings.marginTop;
+                document.getElementById('marginBottom').value = settings.marginBottom;
+                document.getElementById('marginLeft').value = settings.marginLeft;
+                document.getElementById('marginRight').value = settings.marginRight;
+            }
+            if (customGrid) customGrid.style.display = preset === 'custom' ? 'grid' : 'none';
+            updateCanvasMargins();
+        }
+
+        marginBtns.forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                marginBtns.forEach(function (b) { b.classList.remove('active'); });
+                this.classList.add('active');
+                updateMarginPreset(this.dataset.margin);
+            });
+        });
+
+        // Custom margin inputs
+        var marginIds = ['marginTop', 'marginBottom', 'marginLeft', 'marginRight'];
+        marginIds.forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el) {
+                el.addEventListener('change', function () {
+                    settings[id] = parseFloat(this.value) || 0;
+                    if (settings.marginPreset !== 'custom') {
+                        settings.marginPreset = 'custom';
+                        marginBtns.forEach(function (b) { b.classList.remove('active'); });
+                        document.querySelector('.margin-btn[data-margin="custom"]').classList.add('active');
+                        if (customGrid) customGrid.style.display = 'grid';
+                    }
+                    updateCanvasMargins();
+                });
+            }
+        });
+
+        // Unit toggle
+        var unitSelect = document.getElementById('marginUnitSelect');
+        if (unitSelect) {
+            unitSelect.addEventListener('change', function () {
+                settings.marginUnit = this.value;
+            });
+        }
+
+        // Start with Normal preset
+        updateMarginPreset('normal');
+    }
+
+    // ══════════════════════════════════════
+    //  ZOOM / DISPLAY CONTROLS
+    // ══════════════════════════════════════
+
+    function wireZoomControls() {
+        var zoomSlider = document.getElementById('zoomSlider');
+        var zoomValue = document.getElementById('zoomValue');
+        if (zoomSlider && zoomValue) {
+            zoomSlider.addEventListener('input', function () {
+                var pct = parseInt(this.value, 10);
+                zoomValue.textContent = pct + '%';
+                display.zoom = pct;
+                currentScale = (pct / 100) * 1.5;
+                reRenderAllPages();
+            });
+        }
+    }
+
+    // ══════════════════════════════════════
+    //  PDF LOADING & RENDERING
+    // ══════════════════════════════════════
+
+    function loadPdfJs(callback) {
+        if (window.pdfjsLib) {
+            callback();
+            return;
+        }
+        var script = document.createElement('script');
+        script.src = '/js/pdf.min.js';
+        script.onload = function () {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = '/js/pdf.worker.min.js';
+            callback();
+        };
+        script.onerror = function () {
+            if (loadingEl) loadingEl.innerHTML = '<span style="color:red">Failed to load PDF viewer. Please refresh the page.</span>';
+        };
+        document.head.appendChild(script);
+    }
+
+    async function loadSecurePdf(bookId) {
+        loadingEl.style.display = 'flex';
+
+        try {
+            var response = await fetch('/api/pdf/view-secure/' + bookId, {
+                method: 'GET',
+                credentials: 'include'
+            });
+
+            if (response.status === 401 || response.status === 403) {
+                throw new Error('Access Denied: You are not authorized to view this book.');
+            }
+
+            if (!response.ok) {
+                throw new Error('HTTP Error: ' + response.status);
+            }
+
+            var data = await response.json();
+
+            var binaryString = atob(data.pdfData);
+            var len = binaryString.length;
+            var bytes = new Uint8Array(len);
+            for (var i = 0; i < len; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+
+            var loadingTask = pdfjsLib.getDocument({ data: bytes });
+
+            loadingTask.onProgress = function (progress) {
+                var pct = Math.min(Math.round((progress.loaded / progress.total) * 100), 100);
+                var text = loadingEl.querySelector('.pdf-loading-text');
+                var bar = loadingEl.querySelector('.pdf-loading-bar span');
+                if (text) text.textContent = 'Loading... ' + pct + '%';
+                if (bar) bar.style.width = pct + '%';
+            };
+
+            pdfDoc = await loadingTask.promise;
+
+            loadingEl.style.display = 'none';
+            container.innerHTML = '';
+            container.style.textAlign = 'center';
+
+            for (var i = 1; i <= pdfDoc.numPages; i++) {
+                var placeholder = document.createElement('div');
+                placeholder.className = 'pdf-page-placeholder';
+                placeholder.dataset.pageNum = i;
+                placeholder.style.height = '10px';
+                container.appendChild(placeholder);
+            }
+
+            observer = new IntersectionObserver(onPageVisible, {
+                root: container.parentElement || container,
+                rootMargin: '200px 0px',
+                threshold: 0.01
+            });
+
+            document.querySelectorAll('.pdf-page-placeholder').forEach(function (el) {
+                observer.observe(el);
+            });
+
+        } catch (error) {
+            console.error(error);
+            if (loadingEl) loadingEl.innerText = error.message;
+        }
+    }
+
+    function onPageVisible(entries) {
+        entries.forEach(function (entry) {
+            if (!entry.isIntersecting) return;
+            var placeholder = entry.target;
+            var pageNum = parseInt(placeholder.dataset.pageNum, 10);
+
+            observer.unobserve(placeholder);
+
+            if (renderedPages[pageNum]) return;
+            if (pendingRender[pageNum]) return;
+            pendingRender[pageNum] = true;
+
+            renderPageAsync(pageNum, placeholder);
+        });
+    }
+
+    function renderPageAsync(pageNum, placeholder) {
+        pdfDoc.getPage(pageNum).then(function (page) {
+            var viewport = page.getViewport({ scale: currentScale });
+
+            var canvas = document.createElement('canvas');
+            canvas.className = 'pdf-page-canvas';
+            canvas.height = viewport.height;
+            canvas.width = viewport.width;
+            canvas.dataset.pageNum = pageNum;
+
+            var m = getMarginPixels();
+            canvas.style.margin = m.top + 'px ' + m.right + 'px ' + m.bottom + 'px ' + m.left + 'px';
+
+            placeholder.parentNode.replaceChild(canvas, placeholder);
+
+            var ctx = canvas.getContext('2d');
+            return page.render({ canvasContext: ctx, viewport: viewport }).promise;
+        }).then(function () {
+            renderedPages[pageNum] = true;
+            delete pendingRender[pageNum];
+        }).catch(function (err) {
+            delete pendingRender[pageNum];
+        });
+    }
+
+    function reRenderAllPages() {
+        renderedPages = {};
+        pendingRender = {};
+        if (observer) observer.disconnect();
+        container.innerHTML = '';
+        container.style.textAlign = 'center';
+
+        for (var i = 1; i <= pdfDoc.numPages; i++) {
+            var placeholder = document.createElement('div');
+            placeholder.className = 'pdf-page-placeholder';
+            placeholder.dataset.pageNum = i;
+            placeholder.style.height = '10px';
+            container.appendChild(placeholder);
+        }
+
+        observer = new IntersectionObserver(onPageVisible, {
+            root: container.parentElement || container,
+            rootMargin: '200px 0px',
+            threshold: 0.01
+        });
+
+        document.querySelectorAll('.pdf-page-placeholder').forEach(function (el) {
+            observer.observe(el);
+        });
+    }
+
+    function updateCanvasMargins() {
+        var m = getMarginPixels();
+        document.querySelectorAll('.pdf-page-canvas').forEach(function (canvas) {
+            canvas.style.margin = m.top + 'px ' + m.right + 'px ' + m.bottom + 'px ' + m.left + 'px';
+        });
+    }
+
+    function getMarginPixels() {
+        var mmToPx = 3.7795275591; // 1mm ≈ 3.78px at 96dpi
+        var inToPx = 96;
+        var factor = settings.marginUnit === 'in' ? inToPx : mmToPx;
+        var top = (settings.marginTop || 0) * factor;
+        var bottom = (settings.marginBottom || 0) * factor;
+        var left = (settings.marginLeft || 0) * factor;
+        var right = (settings.marginRight || 0) * factor;
+        return { top: top, bottom: bottom, left: left, right: right };
+    }
+
+    // ══════════════════════════════════════
+    //  PRINT FLOW
+    // ══════════════════════════════════════
+
+    function showPrintModal(success, message, reason) {
+        var progress = document.getElementById('printModalStateProgress');
+        var successState = document.getElementById('printModalStateSuccess');
+        var errorState = document.getElementById('printModalStateError');
+
+        function show(state) {
+            [progress, successState, errorState].forEach(function (el) {
+                if (el) el.classList.add('d-none');
+            });
+            if (state) state.classList.remove('d-none');
+        }
+
+        if (success) {
+            show(successState);
+        } else {
+            var reasonEl = document.getElementById('printErrorReason');
+            if (reasonEl) reasonEl.innerHTML = (message || reason || 'Unknown error').replace(/\n/g, '<br>');
+            show(errorState);
+        }
+    }
+
+    function showAgentRequiredModal() {
+        var modalEl = document.getElementById('printResultModal');
+        if (modalEl) {
+            var p = document.getElementById('printModalStateProgress');
+            var s = document.getElementById('printModalStateSuccess');
+            var e = document.getElementById('printModalStateError');
+            if (p) p.classList.add('d-none');
+            if (s) s.classList.add('d-none');
+            if (e) e.classList.remove('d-none');
+        }
+        var reasonEl = document.getElementById('printErrorReason');
+        if (reasonEl) reasonEl.innerHTML = 'The local printer agent is not running.';
+        var helpList = document.getElementById('printHelpList');
+        if (helpList) {
+            helpList.innerHTML = '' +
+                '<li>Double-click the <strong>DR Bahig Books Portal</strong> shortcut on your desktop to start the agent.</li>' +
+                '<li>Wait a few seconds until the system tray icon appears and shows "Agent Running".</li>' +
+                '<li>If you don\'t have the shortcut, run <strong>DR_Bahig_Books_Portal_Setup.exe</strong> to install the agent.</li>' +
+                '<li>Once the agent is running, click <strong>Try Again</strong> below.</li>';
+        }
+        if (modalEl && window.bootstrap) {
+            bootstrap.Modal.getOrCreateInstance(modalEl).show();
+        }
+    }
+
+    window.handlePrint = async function (event, bookId) {
+        console.log('[Print] Starting print job for book', bookId);
+
+        // First check if agent is running
+        try {
+            var agentCheck = await fetch('http://127.0.0.1:8080/api/print-job/health', { mode: 'cors', cache: 'no-cache' });
+            if (!agentCheck.ok) throw new Error('Not OK');
+        } catch (e) {
+            console.warn('[Print] Agent not reachable');
+            showAgentRequiredModal();
+            return;
+        }
+
+        var modalEl = document.getElementById('printResultModal');
+        if (modalEl) {
+            var p = document.getElementById('printModalStateProgress');
+            var s = document.getElementById('printModalStateSuccess');
+            var e = document.getElementById('printModalStateError');
+            if (p) p.classList.remove('d-none');
+            if (s) s.classList.add('d-none');
+            if (e) e.classList.add('d-none');
+            bootstrap.Modal.getOrCreateInstance(modalEl).show();
+        }
+
+        var printBtn = document.getElementById('printBtn');
+        if (printBtn) printBtn.disabled = true;
+
+        try {
+            var copiesInput = document.getElementById('copiesInput');
+            var copies = copiesInput ? parseInt(copiesInput.value, 10) || 1 : 1;
+
+            var printerSelect = document.getElementById('printerSelect');
+            var printerName = printerSelect ? printerSelect.value : settings.printerName;
+
+            var paperSizeSelect = document.getElementById('paperSizeSelect');
+            var paperSize = paperSizeSelect ? paperSizeSelect.value : settings.paperSize;
+
+            var orientationSelect = document.getElementById('orientationSelect');
+            var orientation = orientationSelect ? orientationSelect.value : settings.orientation;
+
+            var scalingRadio = document.querySelector('input[name="scaling"]:checked');
+            var scalingMode = scalingRadio ? scalingRadio.value : settings.scalingMode;
+
+            var customScaleInput = document.getElementById('customScaleInput');
+            var customScale = customScaleInput ? parseInt(customScaleInput.value, 10) || 100 : settings.customScale;
+
+            var marginTop = parseFloat(document.getElementById('marginTop').value) || settings.marginTop;
+            var marginBottom = parseFloat(document.getElementById('marginBottom').value) || settings.marginBottom;
+            var marginLeft = parseFloat(document.getElementById('marginLeft').value) || settings.marginLeft;
+            var marginRight = parseFloat(document.getElementById('marginRight').value) || settings.marginRight;
+            var marginUnit = document.getElementById('marginUnitSelect') ? document.getElementById('marginUnitSelect').value : settings.marginUnit;
+
+            var payload = {
+                bookId: bookId,
+                copies: copies,
+                printerName: printerName || undefined,
+                paperSize: paperSize,
+                orientation: orientation,
+                scalingMode: scalingMode,
+                customScale: customScale,
+                marginUnit: marginUnit,
+                marginTop: marginTop,
+                marginBottom: marginBottom,
+                marginLeft: marginLeft,
+                marginRight: marginRight
+            };
+
+            console.log('[Print] Sending to server:', payload);
+
+            var serverResponse = await fetch('/api/pdf/process-print', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify(payload)
+            });
+
+            console.log('[Print] Server response status:', serverResponse.status);
+
+            var serverData = await serverResponse.json().catch(function () {
+                return { success: false, error: 'HTTP ' + serverResponse.status };
+            });
+
+            console.log('[Print] Server data:', serverData);
+
+            if (!serverResponse.ok || !serverData.success) {
+                throw new Error(serverData.error || serverData.message || 'Server returned ' + serverResponse.status);
+            }
+
+            var jobId = serverData.jobId;
+            var wasQueued = serverData.added === true;
+            console.log('[Print] Job created:', jobId, '| wasQueued:', wasQueued, '| queueCount:', serverData.queueCount);
+
+            if (!wasQueued) {
+                throw new Error('The server could not add the job to the print queue.\n\nPlease refresh the page and try again.\nIf the problem persists, contact support.');
+            }
+
+            var agentClaimed = false;
+            var jobSeenInQueue = false;
+            for (var i = 0; i < 10; i++) {
+                await new Promise(function (r) { setTimeout(r, 2000); });
+                try {
+                    var check = await fetch('/api/pdf/print-agent/pending', { credentials: 'include' });
+                    var checkData = await check.json();
+                    console.log('[Print] Poll attempt', (i + 1), '- pending jobs:', checkData.jobs);
+                    if (checkData.jobs) {
+                        if (checkData.jobs.includes(jobId)) {
+                            jobSeenInQueue = true;
+                            console.log('[Print] Job is still in queue, waiting for agent...');
+                        } else {
+                            // Job not in queue → agent claimed it (or it was seen before and now gone)
+                            if (jobSeenInQueue || i === 0) {
+                                agentClaimed = true;
+                                console.log('[Print] Agent claimed job!');
+                                break;
+                            }
+                        }
+                    }
+                } catch (err) {
+                    console.warn('[Print] Poll error:', err);
+                }
+            }
+
+            if (agentClaimed) {
+                showPrintModal(true, 'Sending to printer...');
+            } else if (jobSeenInQueue) {
+                showPrintModal(false, 'The agent did not claim the job within 20 seconds.\n\nMake sure the agent is running and the printer is online, then try again.');
+            } else {
+                showPrintModal(true, 'The print job was sent to the agent.\nCheck your printer for output.');
+            }
+
+        } catch (error) {
+            console.error('[Print] Error:', error);
+            showPrintModal(false, error.message, error.message);
+        } finally {
+            if (printBtn) printBtn.disabled = false;
+        }
+    };
+
+    var retryBtn = document.getElementById('printRetryBtn');
+    if (retryBtn) {
+        retryBtn.addEventListener('click', function () {
+            var modalEl = document.getElementById('printResultModal');
+            if (modalEl) bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+        });
+    }
+
+    var modalEl = document.getElementById('printResultModal');
+    if (modalEl) {
+        modalEl.addEventListener('hidden.bs.modal', function () {
+            var printBtn = document.getElementById('printBtn');
+            if (printBtn) printBtn.focus({ preventScroll: false });
+        });
+    }
+})();

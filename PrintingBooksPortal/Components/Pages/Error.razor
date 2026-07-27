@@ -1,0 +1,20 @@
+﻿@page "/Error"
+@layout PublicLayout
+@inject IWebHostEnvironment HostEnvironment
+
+<div class="error-page">
+    <div class="container">
+        <div class="row min-vh-100 align-items-center justify-content-center">
+            <div class="col-md-6 text-center">
+                <div class="error-code text-danger">500</div>
+                <h1 class="error-title">Something Went Wrong</h1>
+                <p class="error-description">An error occurred while processing your request.</p>
+                @if (HostEnvironment.IsDevelopment())
+                {
+                    <p class="text-muted mb-3">See the console for details.</p>
+                }
+                <a href="/" class="btn btn-primary btn-lg px-4">Go Home</a>
+            </div>
+        </div>
+    </div>
+</div>

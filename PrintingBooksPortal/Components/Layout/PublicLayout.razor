@@ -1,0 +1,57 @@
+@inherits LayoutComponentBase
+@inject NavigationManager Navigation
+
+<div class="public-layout">
+    <header class="public-header">
+        <div class="container">
+            <div class="d-flex align-items-center justify-content-between py-3">
+                <a href="/" class="d-flex align-items-center text-decoration-none">
+                    <div class="brand-icon me-2">
+                        <svg width="36" height="36" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <rect width="32" height="32" rx="8" fill="#1a56db"/>
+                            <path d="M8 10h16v2H8zm0 5h12v2H8zm0 5h14v2H8z" fill="white"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="brand-text">PrintingBooks</div>
+                        <div class="brand-subtitle">Management Portal</div>
+                    </div>
+                </a>
+                <a href="/login" class="btn btn-primary btn-sm px-4 py-2">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="me-1">
+                        <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
+                        <polyline points="10 17 15 12 10 7"/>
+                        <line x1="15" y1="12" x2="3" y2="12"/>
+                    </svg>
+                    Sign In
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <main class="public-main">
+        @Body
+    </main>
+
+    <footer class="public-footer">
+        <div class="container">
+            <div class="row">
+                <div class="col-md-6 text-start">
+                    <p class="mb-0">&copy; @DateTime.Now.Year PrintingBooks Portal. All rights reserved.</p>
+                </div>
+                <div class="col-md-6 text-end">
+                    <p class="mb-0">
+                        <a href="/" class="text-white-50 text-decoration-none me-3">Home</a>
+                        <a href="/login" class="text-white-50 text-decoration-none">Sign In</a>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </footer>
+</div>
+
+<div id="blazor-error-ui" data-nosnippet>
+    An unhandled error has occurred.
+    <a href="." class="reload">Reload</a>
+    <span class="dismiss">Dismiss</span>
+</div>

@@ -1,0 +1,139 @@
+@page "/admin/assignments"
+@attribute [Authorize(Roles = "Admin")]
+@rendermode InteractiveServer
+@inject AppDbContext Db
+@inject NavigationManager Navigation
+
+<div class="content-area">
+    <div class="page-header">
+        <div>
+            <h1>Book Access</h1>
+            <p class="page-subtitle">Manage which books are available to each bookshop</p>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(message))
+    {
+        <div class="alert alert-modern alert-success">@message</div>
+    }
+
+    @if (shops == null || books == null)
+    {
+        <div class="loading-placeholder">Loading...</div>
+    }
+    else
+    {
+        <div class="row g-4">
+            @foreach (var shop in shops.Where(s => s.IsActive))
+            {
+                var expanded = expandedShops.Contains(shop.Id);
+                <div class="col-xl-6">
+                    <div class="assign-card">
+                        <div class="assign-card-header" @onclick="() => ToggleExpand(shop.Id)" role="button">
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="assign-shop-icon">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                                </div>
+                                <h5 class="mb-0">@shop.Name</h5>
+                            </div>
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="assign-count">@GetAssignedCount(shop.Id) / @books.Count(b => b.IsActive) books</span>
+                                <svg class="expand-arrow @(expanded ? "expanded" : "")" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+                            </div>
+                        </div>
+                        @if (expanded)
+                        {
+                            <div class="assign-card-body">
+                                @if (!books.Any(b => b.IsActive))
+                                {
+                                    <p class="text-muted mb-0">No active books available.</p>
+                                }
+                                else
+                                {
+                                    @foreach (var book in books.Where(b => b.IsActive).OrderBy(b => b.Title))
+                                    {
+                                        var isAssigned = assignedBooks.ContainsKey($"{shop.Id}-{book.Id}");
+                                        <div class="assign-row @(isAssigned ? "assigned" : "")" @onclick="() => ToggleAssignment(shop.Id, book.Id, !isAssigned)">
+                                            <div class="assign-check">
+                                                <div class="toggle-switch @(isAssigned ? "on" : "off")">
+                                                    <div class="toggle-knob"></div>
+                                                </div>
+                                            </div>
+                                            <div class="assign-info">
+                                                <span class="assign-book-title">@book.Title</span>
+                                                <span class="assign-book-board">@book.Board?.Name</span>
+                                            </div>
+                                            <span class="assign-pages">@book.PageCount pgs</span>
+                                        </div>
+                                    }
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private List<Shop>? shops;
+    private List<Book>? books;
+    private Dictionary<string, bool> assignedBooks = new();
+    private HashSet<int> expandedShops = new();
+    private string? message;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        shops = await Db.Shops.OrderBy(s => s.Name).ToListAsync<Shop>();
+        books = await Db.Books.Include(b => b.Board).OrderBy(b => b.Title).ToListAsync<Book>();
+        var assignments = await Db.ShopBookAssignments.Where(a => a.IsActive).ToListAsync<ShopBookAssignment>();
+
+        assignedBooks = new Dictionary<string, bool>();
+        foreach (var a in assignments)
+            assignedBooks[$"{a.ShopId}-{a.BookId}"] = true;
+    }
+
+    private void ToggleExpand(int shopId)
+    {
+        if (!expandedShops.Remove(shopId))
+            expandedShops.Add(shopId);
+    }
+
+    private int GetAssignedCount(int shopId)
+    {
+        return assignedBooks.Count(kv =>
+        {
+            var parts = kv.Key.Split('-');
+            return parts.Length == 2 && int.Parse(parts[0]) == shopId && kv.Value;
+        });
+    }
+
+    private async Task ToggleAssignment(int shopId, int bookId, bool assigned)
+    {
+        var existing = await Db.ShopBookAssignments
+            .FirstOrDefaultAsync(a => a.ShopId == shopId && a.BookId == bookId);
+
+        if (assigned && existing == null)
+        {
+            Db.ShopBookAssignments.Add(new ShopBookAssignment
+            {
+                ShopId = shopId,
+                BookId = bookId
+            });
+        }
+        else if (!assigned && existing != null)
+        {
+            Db.ShopBookAssignments.Remove(existing);
+        }
+
+        await Db.SaveChangesAsync();
+        assignedBooks[$"{shopId}-{bookId}"] = assigned;
+        message = assigned ? "Book assigned." : "Book unassigned.";
+    }
+}

@@ -1,0 +1,182 @@
+@page "/admin/settings"
+@attribute [Authorize(Roles = "Admin")]
+@rendermode InteractiveServer
+@inject ISettingsService SettingsService
+
+<div class="content-area">
+    <div class="page-header">
+        <div>
+            <h1>System Settings</h1>
+            <p class="page-subtitle">Configure portal-wide behavior</p>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(message))
+    {
+        <div class="alert alert-modern alert-success">@message</div>
+    }
+    @if (!string.IsNullOrEmpty(error))
+    {
+        <div class="alert alert-modern alert-danger">@error</div>
+    }
+
+    <div class="settings-grid">
+        <!-- Watermark Toggle Card -->
+        <div class="setting-card">
+            <div class="setting-card-header">
+                <div class="setting-icon setting-icon-@(watermarkEnabled ? "on" : "off")">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 2C9 6 7 9 7 12a5 5 0 0 0 10 0c0-3-2-6-5-10z"/>
+                    </svg>
+                </div>
+                <div>
+                    <h3 class="setting-title">PDF Watermark</h3>
+                    <p class="setting-subtitle">Stamp shop + user identity on every page when admin or shop users view or print a book.</p>
+                </div>
+            </div>
+            <div class="setting-card-body">
+                <label class="toggle-row">
+                    <div class="toggle-info">
+                        <span class="toggle-label">@((watermarkEnabled) ? "Watermark is ACTIVE" : "Watermark is DISABLED")</span>
+                        <span class="toggle-hint">@((watermarkEnabled) ? "Every viewed or printed PDF will be stamped." : "PDFs are served without any stamp.")</span>
+                    </div>
+                    <div class="toggle-switch @(watermarkEnabled ? "is-on" : "")">
+                        <input type="checkbox" checked="@watermarkEnabled" @onchange="OnWatermarkChanged" />
+                        <span class="toggle-slider"></span>
+                    </div>
+                </label>
+            </div>
+        </div>
+
+        <!-- Watermark Text Card -->
+        <div class="setting-card">
+            <div class="setting-card-header">
+                <div class="setting-icon setting-icon-on">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                    </svg>
+                </div>
+                <div>
+                    <h3 class="setting-title">Watermark Text</h3>
+                    <p class="setting-subtitle">Customize the text stamped on each page. Use placeholders to insert dynamic values.</p>
+                </div>
+            </div>
+            <div class="setting-card-body">
+                <div class="watermark-placeholders">
+                    <span class="placeholder-label">Available placeholders:</span>
+                    <code class="placeholder-tag">{shopName}</code>
+                    <code class="placeholder-tag">{userName}</code>
+                    <code class="placeholder-tag">{date}</code>
+                    <code class="placeholder-tag">{timestamp}</code>
+                </div>
+
+                <div class="watermark-editor">
+                    <textarea class="watermark-textarea" @bind="watermarkText" rows="5" spellcheck="false"></textarea>
+                </div>
+
+                <div class="watermark-preview">
+                    <span class="preview-label">Preview:</span>
+                    <div class="preview-box">
+                        @foreach (var line in GetPreviewLines())
+                        {
+                            <div class="preview-line">@line</div>
+                        }
+                    </div>
+                </div>
+
+                <div class="watermark-actions">
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="RestoreDefaultWatermark">Restore Default</button>
+                    <button class="btn btn-sm btn-primary" @onclick="SaveWatermarkText" disabled="@(savingText || watermarkText == originalWatermarkText)">
+                        @if (savingText)
+                        {
+                            <span class="loading-spinner me-1"></span>
+                        }
+                        @(savingText ? "Saving..." : "Save Text")
+                    </button>
+                </div>
+
+                @if (!string.IsNullOrEmpty(textMessage))
+                {
+                    <div class="alert alert-modern alert-success mt-2 mb-0">@textMessage</div>
+                }
+                @if (!string.IsNullOrEmpty(textError))
+                {
+                    <div class="alert alert-modern alert-danger mt-2 mb-0">@textError</div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private bool watermarkEnabled = true;
+    private string? message;
+    private string? error;
+
+    private string watermarkText = "";
+    private string originalWatermarkText = "";
+    private bool savingText;
+    private string? textMessage;
+    private string? textError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        watermarkEnabled = await SettingsService.IsWatermarkEnabledAsync();
+        watermarkText = await SettingsService.GetWatermarkTextAsync();
+        originalWatermarkText = watermarkText;
+    }
+
+    private async Task OnWatermarkChanged(ChangeEventArgs e)
+    {
+        var enabled = e.Value is bool b ? b : bool.TryParse(e.Value?.ToString(), out var parsed) && parsed;
+        message = null;
+        error = null;
+        try
+        {
+            await SettingsService.SetWatermarkEnabledAsync(enabled);
+            watermarkEnabled = enabled;
+            message = enabled ? "Watermark enabled." : "Watermark disabled.";
+        }
+        catch (Exception ex)
+        {
+            error = "Failed to save: " + ex.Message;
+        }
+    }
+
+    private async Task SaveWatermarkText()
+    {
+        savingText = true;
+        textMessage = null;
+        textError = null;
+        try
+        {
+            await SettingsService.SetWatermarkTextAsync(watermarkText);
+            originalWatermarkText = watermarkText;
+            textMessage = "Watermark text saved.";
+        }
+        catch (Exception ex)
+        {
+            textError = "Failed to save: " + ex.Message;
+        }
+        finally
+        {
+            savingText = false;
+        }
+    }
+
+    private async Task RestoreDefaultWatermark()
+    {
+        watermarkText = "LICENSED TO: {shopName}\nUSER: {userName}\nDATE: {date}\nDO NOT DISTRIBUTE";
+        await SaveWatermarkText();
+    }
+
+    private string[] GetPreviewLines()
+    {
+        var preview = watermarkText
+            .Replace("{shopName}", "Sample Shop")
+            .Replace("{userName}", "user@example.com")
+            .Replace("{date}", DateTime.Now.ToEgyptLocal().ToString("yyyy-MM-dd HH:mm"))
+            .Replace("{timestamp}", DateTime.Now.ToEgyptLocal().ToString("yyyy-MM-dd HH:mm:ss"));
+        return preview.Split('\n');
+    }
+}

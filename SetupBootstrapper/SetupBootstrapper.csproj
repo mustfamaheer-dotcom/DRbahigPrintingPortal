@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>DR_Bahig_Books_Portal_Setup</AssemblyName>
+    <ApplicationIcon>..\BookShopPrintAgent\book.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="..\BookShopPrintAgent\publish\BookShopPrintAgent.exe" LogicalName="BookShopPrintAgent.exe" />
+    <EmbeddedResource Include="..\BookShopPrintAgent\publish\BookShopAgentUI.exe" LogicalName="BookShopAgentUI.exe" />
+    <EmbeddedResource Include="..\BookShopPrintAgent\publish\SumatraPDF-3.6.1-64.exe" LogicalName="SumatraPDF-3.6.1-64.exe" />
+    <EmbeddedResource Include="..\BookShopPrintAgent\publish\appsettings.json" LogicalName="appsettings.json" />
+    <EmbeddedResource Include="..\BookShopPrintAgent\book.ico" LogicalName="book.ico" />
+  </ItemGroup>
+
+</Project>

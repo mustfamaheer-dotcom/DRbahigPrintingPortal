@@ -1,0 +1,74 @@
+## .NET
+bin/
+obj/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.userprefs
+
+## Build results
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Ww][Ii][Nn]32/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+
+## NuGet
+**/[Pp]ackages/*
+!**/[Pp]ackages/build/
+*.nupkg
+**/[Pp]ackages/repositories.config
+
+## Visual Studio
+.vs/
+*.sln.ide/
+
+## JetBrains Rider
+.idea/
+*.sln.iml
+
+## Publish outputs
+publish/
+**/publish/
+
+## Build artifacts / large binaries
+*.exe
+*.dll
+*.pdb
+*.zip
+*.tmp
+BookShopAgent/
+New folder/
+
+## Bootstrap full (keep only minified)
+wwwroot/lib/bootstrap/dist/css/bootstrap.css
+wwwroot/lib/bootstrap/dist/css/bootstrap.rtl.css
+wwwroot/lib/bootstrap/dist/css/bootstrap-grid.css
+wwwroot/lib/bootstrap/dist/css/bootstrap-grid.rtl.css
+wwwroot/lib/bootstrap/dist/css/bootstrap-reboot.css
+wwwroot/lib/bootstrap/dist/css/bootstrap-reboot.rtl.css
+wwwroot/lib/bootstrap/dist/css/bootstrap-utilities.css
+wwwroot/lib/bootstrap/dist/css/bootstrap-utilities.rtl.css
+wwwroot/lib/bootstrap/dist/js/bootstrap.bundle.js
+wwwroot/lib/bootstrap/dist/js/bootstrap.js
+wwwroot/lib/bootstrap/dist/js/bootstrap.esm.js
+*.css.map
+
+## Node
+node_modules/
+
+## OS
+.DS_Store
+Thumbs.db
+
+## Secrets
+appsettings.*.local.json
+**/appsettings.json

@@ -1,0 +1,155 @@
+﻿@page "/"
+@layout PublicLayout
+@inject NavigationManager Navigation
+
+@code {
+    protected override void OnInitialized()
+    {
+        Navigation.NavigateTo("/login", replace: true);
+    }
+}
+
+<div class="hero-section">
+    <div class="hero-bg"></div>
+    <div class="hero-particles">
+        <div class="particle" style="left:10%;top:20%;animation-delay:0s"></div>
+        <div class="particle" style="left:25%;top:60%;animation-delay:0.5s;width:6px;height:6px"></div>
+        <div class="particle" style="left:50%;top:15%;animation-delay:1s;width:8px;height:8px"></div>
+        <div class="particle" style="left:70%;top:45%;animation-delay:1.5s;width:4px;height:4px"></div>
+        <div class="particle" style="left:85%;top:70%;animation-delay:2s;width:6px;height:6px"></div>
+        <div class="particle" style="left:40%;top:80%;animation-delay:2.5s;width:5px;height:5px"></div>
+        <div class="particle" style="left:15%;top:40%;animation-delay:3s;width:7px;height:7px"></div>
+        <div class="particle" style="left:90%;top:25%;animation-delay:3.5s;width:5px;height:5px"></div>
+    </div>
+    <div class="container">
+        <div class="row min-vh-100 align-items-center">
+            <div class="col-lg-7">
+                <div class="hero-content">
+                    <span class="hero-badge">Secure Printing Management</span>
+                    <h1 class="hero-title">Centralized Printing Platform for <span class="text-gradient">Educators & Bookshops</span></h1>
+                    <p class="hero-description">
+                        Streamline your educational printing workflow with secure access, 
+                        real-time tracking, and comprehensive analytics. Manage book assignments 
+                        and monitor print activity across all your bookshops.
+                    </p>
+                    <div class="hero-actions">
+                        <a href="/login" class="btn btn-primary btn-lg px-5 py-3">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="me-2">
+                                <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
+                                <polyline points="10 17 15 12 10 7"/>
+                                <line x1="15" y1="12" x2="3" y2="12"/>
+                            </svg>
+                            Sign In to Dashboard
+                        </a>
+                    </div>
+                    <div class="hero-stats mt-5">
+                        <div class="hero-stat">
+                            <span class="hero-stat-value">500+</span>
+                            <span class="hero-stat-label">Books</span>
+                        </div>
+                        <div class="hero-stat">
+                            <span class="hero-stat-value">50+</span>
+                            <span class="hero-stat-label">Shops</span>
+                        </div>
+                        <div class="hero-stat">
+                            <span class="hero-stat-value">10K+</span>
+                            <span class="hero-stat-label">Prints</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-5 d-none d-lg-block">
+                <div class="hero-visual">
+                    <div class="hero-card-float card-1">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1a56db" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                        <span>Upload Books</span>
+                    </div>
+                    <div class="hero-card-float card-2">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                        <span>Secure Print</span>
+                    </div>
+                    <div class="hero-card-float card-3">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8b5cf6" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+                        <span>Analytics</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="features-section">
+    <div class="container">
+        <div class="text-center mb-5">
+            <span class="section-badge">Features</span>
+            <h2 class="section-title">Everything You Need</h2>
+            <p class="section-subtitle">Comprehensive tools for managing educational printing</p>
+        </div>
+        <div class="row g-4">
+            <div class="col-md-4">
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                            <line x1="16" y1="13" x2="8" y2="13"/>
+                            <line x1="16" y1="17" x2="8" y2="17"/>
+                        </svg>
+                    </div>
+                    <h3>Book Management</h3>
+                    <p>Upload, organize, and manage educational books with ease. Categorize by educational board and track all your resources in one place.</p>
+                    <a href="/login" class="feature-link">Learn more &rarr;</a>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="feature-card">
+                    <div class="feature-icon" style="background:#ecfdf5;color:#10b981">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                            <line x1="8" y1="21" x2="16" y2="21"/>
+                            <line x1="12" y1="17" x2="12" y2="21"/>
+                        </svg>
+                    </div>
+                    <h3>Secure Printing</h3>
+                    <p>Print books directly from the platform with full security controls, activity logging, and copy protection. Every print is tracked and verified.</p>
+                    <a href="/login" class="feature-link">Learn more &rarr;</a>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="feature-card">
+                    <div class="feature-icon" style="background:#f5f3ff;color:#8b5cf6">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="18" y1="20" x2="18" y2="10"/>
+                            <line x1="12" y1="20" x2="12" y2="4"/>
+                            <line x1="6" y1="20" x2="6" y2="14"/>
+                        </svg>
+                    </div>
+                    <h3>Analytics & Tracking</h3>
+                    <p>Monitor print activity with detailed analytics per shop and per book. Make data-driven decisions for your educational resources.</p>
+                    <a href="/login" class="feature-link">Learn more &rarr;</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="cta-section">
+    <div class="container">
+        <div class="cta-card">
+            <div class="row align-items-center">
+                <div class="col-lg-8">
+                    <h2 class="cta-title">Ready to Get Started?</h2>
+                    <p class="cta-text">Join the platform and start managing your educational printing workflow efficiently.</p>
+                </div>
+                <div class="col-lg-4 text-lg-end mt-3 mt-lg-0">
+                    <a href="/login" class="btn btn-light btn-lg px-5 py-3">
+                        Get Started
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="ms-2">
+                            <line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>
+                        </svg>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,41 @@
+﻿## .NET
+bin/
+obj/
+publish/
+*.user
+*.suo
+*.sln.docstats
+*.userprefs
+
+## Build artifacts
+*.nupkg
+*.log
+*.tmp
+*.dll
+*.exe
+*.pdb
+
+## Database
+*.db
+*.db-shm
+*.db-wal
+App_Data/Books/*
+!App_Data/Books/.gitkeep
+
+## IDE
+.vs/
+.vscode/
+.idea/
+*.swp
+
+## OS
+.DS_Store
+Thumbs.db
+publish.zip
+*.publishSettings
+publish/
+App_Data/
+
+## Exceptions - SumatraPDF is a source dependency, not a build artifact
+!SumatraPDF*.exe
+!book.ico

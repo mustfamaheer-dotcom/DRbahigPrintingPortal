@@ -1,0 +1,182 @@
+﻿@inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthState
+@implements IDisposable
+
+<div class="sidebar">
+    <div class="navbar-brand">
+        <div class="brand-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+            </svg>
+        </div>
+        <div class="brand-text">
+            <span class="brand-title">PrintingBooks</span>
+            <span class="brand-subtitle">Management Portal</span>
+        </div>
+    </div>
+
+    <nav class="sidebar-nav">
+        @foreach (var group in NavGroups)
+        {
+            <AuthorizeView Roles="@group.Roles">
+                <Authorized>
+                    @foreach (var item in group.Items)
+                    {
+                        <a class="nav-link @(IsActive(item.Href) ? "active" : "")" 
+                           href="@item.Href"
+                           @onclick="@(() => NavigateToPage(item.Href))"
+                           @onclick:preventDefault="false">
+                            <span class="nav-icon">@((MarkupString)item.IconSvg)</span>
+                            <span class="nav-label">@item.Label</span>
+                            @if (IsActive(item.Href))
+                            {
+                                <span class="nav-indicator"></span>
+                            }
+                        </a>
+                    }
+                </Authorized>
+            </AuthorizeView>
+        }
+    </nav>
+
+    <div class="sidebar-footer">
+        <a class="nav-link" href="/login">
+            <span class="nav-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+                </svg>
+            </span>
+            <span class="nav-label">Logout</span>
+        </a>
+    </div>
+</div>
+
+@code {
+    private string currentUri = "";
+
+    protected override void OnInitialized()
+    {
+        currentUri = Navigation.ToBaseRelativePath(Navigation.Uri);
+        Navigation.LocationChanged += OnLocationChanged;
+    }
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        currentUri = Navigation.ToBaseRelativePath(e.Location);
+        InvokeAsync(StateHasChanged);
+    }
+
+    private bool IsActive(string href)
+    {
+        // Remove leading slash from href for comparison
+        var normalizedHref = href.TrimStart('/');
+        var normalizedCurrent = currentUri.TrimStart('/');
+
+        // Exact match for home
+        if (href == "/" || href == "")
+        {
+            return normalizedCurrent == "" || normalizedCurrent == "Home";
+        }
+
+        // For other pages, check if current path starts with the href
+        return normalizedCurrent.StartsWith(normalizedHref, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void NavigateToPage(string href)
+    {
+        // This will be handled by the browser's default navigation
+    }
+
+    public void Dispose()
+    {
+        Navigation.LocationChanged -= OnLocationChanged;
+    }
+
+    private record NavItem(string Label, string Href, string IconSvg);
+
+    private record NavGroup(string Roles, NavItem[] Items);
+
+    private static readonly NavGroup[] NavGroups =
+    [
+        new("Admin",
+        [
+            new("Dashboard", "/admin/dashboard", SvgIcons.Dashboard),
+            new("Boards", "/admin/boards", SvgIcons.Boards),
+            new("Books", "/admin/books", SvgIcons.Books),
+            new("Shops", "/admin/shops", SvgIcons.Shops),
+            new("Book Access", "/admin/assignments", SvgIcons.BookAccess),
+            new("Users", "/admin/users", SvgIcons.Users),
+            new("Analytics", "/admin/analytics", SvgIcons.Analytics),
+            new("Settings", "/admin/settings", SvgIcons.Settings),
+        ]),
+        new("Shop",
+        [
+            new("My Books", "/shop/mybooks", SvgIcons.Books),
+            new("Print History", "/shop/history", SvgIcons.History),
+        ]),
+    ];
+
+    private static class SvgIcons
+    {
+        public const string Dashboard = """
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/>
+            </svg>
+            """;
+
+        public const string Boards = """
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/>
+            </svg>
+            """;
+
+        public const string Books = """
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+            </svg>
+            """;
+
+        public const string Shops = """
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4"/><path d="M2 7h20"/>
+            </svg>
+            """;
+
+        public const string BookAccess = """
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><path d="M8 7h8"/><path d="M8 11h6"/>
+            </svg>
+            """;
+
+        public const string Assignments = """
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+            </svg>
+            """;
+
+        public const string Analytics = """
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/>
+            </svg>
+            """;
+
+        public const string Users = """
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+            </svg>
+            """;
+
+        public const string History = """
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+            </svg>
+            """;
+
+        public const string Settings = """
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="3"/>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.39.16.74.42 1 .77l.51.51"/>
+            </svg>
+            """;
+    }
+}

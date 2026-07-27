@@ -1,0 +1,147 @@
+﻿@inherits LayoutComponentBase
+@inject NavigationManager Navigation
+@inject SignInManager<ApplicationUser> SignInManager
+@inject UserManager<ApplicationUser> UserManager
+@inject IJSRuntime JSRuntime
+@implements IAsyncDisposable
+
+<div class="app-layout">
+    @if (showSidebar)
+    {
+        <aside class="app-sidebar" id="appSidebar">
+            <NavMenu />
+        </aside>
+    }
+
+    <div class="app-main">
+        @if (showTopBar)
+        {
+            <header class="app-header">
+                <div class="d-flex align-items-center justify-content-between h-100 px-4">
+                    <div class="d-flex align-items-center gap-3">
+                        <button class="sidebar-toggle d-lg-none" @onclick="ToggleSidebar">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                                <line x1="3" y1="6" x2="21" y2="6"/>
+                                <line x1="3" y1="12" x2="21" y2="12"/>
+                                <line x1="3" y1="18" x2="21" y2="18"/>
+                            </svg>
+                        </button>
+                        <div class="header-breadcrumb d-none d-md-flex">
+                            <span class="breadcrumb-item">@GetBreadcrumb()</span>
+                        </div>
+                    </div>
+
+                    <AuthorizeView>
+                        <Authorized>
+                            <div class="user-menu">
+                                <button class="user-menu-trigger" @onclick="ToggleUserMenu">
+                                    <div class="user-avatar">
+                                        @GetInitials(context.User.Identity?.Name)
+                                    </div>
+                                    <div class="user-info d-none d-lg-block">
+                                        <span class="user-name">@context.User.Identity?.Name</span>
+                                        <span class="user-role">@(context.User.IsInRole("Admin") ? "Administrator" : "Shop")</span>
+                                    </div>
+                                    <svg class="user-chevron d-none d-lg-block" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+                                </button>
+                                <div class="user-dropdown" id="userDropdown">
+                                    <div class="dropdown-header-info">
+                                        <div class="dropdown-avatar">@GetInitials(context.User.Identity?.Name)</div>
+                                        <div>
+                                            <div class="dropdown-name">@context.User.Identity?.Name</div>
+                                            <div class="dropdown-role">@(context.User.IsInRole("Admin") ? "Administrator" : "Shop")</div>
+                                        </div>
+                                    </div>
+                                    <div class="dropdown-divider"></div>
+                                    <a href="/login" class="dropdown-item">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                                        Sign Out
+                                    </a>
+                                </div>
+                            </div>
+                        </Authorized>
+                        <NotAuthorized>
+                            <a href="/login" class="btn-login-header">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+                                <span>Sign In</span>
+                            </a>
+                        </NotAuthorized>
+                    </AuthorizeView>
+                </div>
+            </header>
+        }
+
+        <main class="app-content">
+            @Body
+        </main>
+    </div>
+</div>
+
+<div id="blazor-error-ui" data-nosnippet>
+    An unhandled error has occurred.
+    <a href="." class="reload">Reload</a>
+    <span class="dismiss">Dismiss</span>
+</div>
+
+@code {
+    private bool showSidebar = true;
+    private bool showTopBar = true;
+    private IJSObjectReference? layoutModule;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            layoutModule = await JSRuntime.InvokeAsync<IJSObjectReference>("import",
+                "./Components/Layout/MainLayout.razor.js");
+        }
+    }
+
+    protected override void OnInitialized()
+    {
+        var path = new Uri(Navigation.Uri).AbsolutePath;
+        showSidebar = !path.StartsWith("/login", StringComparison.OrdinalIgnoreCase)
+                   && !path.StartsWith("/access-denied", StringComparison.OrdinalIgnoreCase)
+                   && !path.StartsWith("/shop/viewer", StringComparison.OrdinalIgnoreCase);
+        showTopBar = showSidebar;
+    }
+
+    private async Task ToggleUserMenu()
+    {
+        if (layoutModule is not null)
+        {
+            await layoutModule.InvokeVoidAsync("toggleUserMenu");
+        }
+    }
+
+    private async Task ToggleSidebar()
+    {
+        if (layoutModule is not null)
+        {
+            await layoutModule.InvokeVoidAsync("toggleSidebar");
+        }
+    }
+
+    private string GetBreadcrumb()
+    {
+        var path = new Uri(Navigation.Uri).AbsolutePath.Trim('/');
+        if (string.IsNullOrEmpty(path)) return "Home";
+        var segments = path.Split('/');
+        return string.Join(" / ", segments.Select(s => char.ToUpper(s[0]) + s.Substring(1)));
+    }
+
+    private static string GetInitials(string? name)
+    {
+        if (string.IsNullOrEmpty(name)) return "?";
+        var parts = name.Split(['@', ' ', '.'], StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length > 0 ? parts[0][..1].ToUpper() : "?";
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (layoutModule is not null)
+        {
+            await layoutModule.DisposeAsync();
+        }
+    }
+}
