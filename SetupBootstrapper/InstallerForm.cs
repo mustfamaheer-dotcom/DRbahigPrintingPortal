@@ -6,191 +6,203 @@ namespace SetupBootstrapper;
 
 public class InstallerForm : Form
 {
-    private const int FORM_W = 680;
-    private const int FORM_H = 540;
     private const string APP_NAME = "DR Bahig Books Portal";
-    private static readonly Color Accent = Color.FromArgb(16, 185, 129);
-    private static readonly Color BgDark = Color.FromArgb(18, 20, 30);
-    private static readonly Color BgPanel = Color.FromArgb(24, 27, 38);
-    private static readonly Color BgHeader = Color.FromArgb(14, 16, 24);
-    private static readonly Color FgPrimary = Color.White;
-    private static readonly Color FgSecondary = Color.FromArgb(170, 174, 190);
-    private static readonly Color FgMuted = Color.FromArgb(120, 124, 140);
 
-    private Panel sidePanel, headerPanel, contentPanel, bottomPanel;
-    private Label welcomeStep, installStep, completeStep;
-    private Label titleLabel, statusLabel;
-    private ProgressBar progressBar;
-    private Button installBtn, cancelBtn;
-    private CheckBox shortcutCb, launchCb;
-    private int step;
+    private static readonly Color ClrPrimary = Color.FromArgb(16, 185, 129);
+    private static readonly Color ClrDark = Color.FromArgb(22, 23, 28);
+    private static readonly Color ClrSide = Color.FromArgb(26, 27, 33);
+    private static readonly Color ClrHeader = Color.FromArgb(30, 32, 38);
+    private static readonly Color ClrBottom = Color.FromArgb(26, 27, 33);
+    private static readonly Color ClrText = Color.FromArgb(220, 222, 228);
+    private static readonly Color ClrMuted = Color.FromArgb(140, 142, 150);
+    private static readonly Color ClrDim = Color.FromArgb(90, 92, 100);
 
-    private const int WELCOME = 0, INSTALLING = 1, COMPLETE = 2;
+    private Panel sidePanel = null!, contentPanel = null!, bottomPanel = null!;
+    private Label step1Label = null!, step2Label = null!, step3Label = null!;
+    private Label? statusLabel;
+    private ProgressBar? progressBar;
+    private Button installBtn = null!, cancelBtn = null!;
+    private CheckBox? shortcutCb, launchCb;
+    private int currentStep;
+
+    private const int STEP_WELCOME = 0;
+    private const int STEP_INSTALL = 1;
+    private const int STEP_DONE = 2;
+
+    private const int FORM_W = 680;
+    private const int FORM_H = 500;
+    private const int SIDE_W = 180;
 
     public InstallerForm()
     {
+        var appIcon = LoadAppIcon();
+
         StartPosition = FormStartPosition.CenterScreen;
         FormBorderStyle = FormBorderStyle.FixedSingle;
         MaximizeBox = false;
         ClientSize = new Size(FORM_W, FORM_H);
         Text = APP_NAME + " Setup";
-        BackColor = BgDark;
-        Font = new Font("Segoe UI", 10);
-        Icon = LoadAppIcon();
+        BackColor = ClrDark;
+        Font = new Font("Segoe UI", 9);
+        Icon = appIcon;
+        Padding = new Padding(0);
 
-        // ── Side panel (branding bar) ──
+        BuildSidePanel(appIcon);
+        BuildBottomBar();
+
+        contentPanel = new Panel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = ClrDark,
+            Padding = new Padding(36, 20, 36, 0),
+            ForeColor = ClrText
+        };
+
+        Controls.AddRange([sidePanel, contentPanel, bottomPanel]);
+        ShowWelcome();
+    }
+
+    // ──────────────────────────────────────────────
+    //  SIDE PANEL
+    // ──────────────────────────────────────────────
+    private void BuildSidePanel(Icon? appIcon)
+    {
         sidePanel = new Panel
         {
             Dock = DockStyle.Left,
-            Width = 150,
-            BackColor = BgPanel
+            Width = SIDE_W,
+            BackColor = ClrSide
         };
 
-        var sideIcon = new PictureBox
+        var iconBox = new PictureBox
         {
             Size = new Size(56, 56),
-            Location = new Point(47, 24),
+            Location = new Point((SIDE_W - 56) / 2, 28),
             SizeMode = PictureBoxSizeMode.Zoom,
-            Image = Icon?.ToBitmap()
+            Image = appIcon?.ToBitmap() ?? SystemIcons.Application.ToBitmap()
         };
-        var sideTitle = new Label
+
+        var appLabel = new Label
         {
             Text = APP_NAME,
-            Location = new Point(15, 88),
-            Width = 120,
-            Height = 44,
-            ForeColor = FgPrimary,
-            Font = new Font("Segoe UI", 12, FontStyle.Bold),
-            TextAlign = ContentAlignment.TopCenter
-        };
-        var sideSub = new Label
-        {
-            Text = "Print Agent",
-            Location = new Point(15, 128),
-            Width = 120,
+            Location = new Point(8, 92),
+            Width = SIDE_W - 16,
             Height = 20,
-            ForeColor = FgSecondary,
-            Font = new Font("Segoe UI", 9),
-            TextAlign = ContentAlignment.TopCenter
+            TextAlign = ContentAlignment.MiddleCenter,
+            ForeColor = ClrText,
+            Font = new Font("Segoe UI", 10, FontStyle.Bold)
         };
 
-        // Step indicators
-        welcomeStep = CreateStepLabel("\u25CF  Welcome", 180);
-        installStep = CreateStepLabel("\u25CB  Install", 210);
-        completeStep = CreateStepLabel("\u25CB  Complete", 240);
-
-        var sideLine = new Panel
+        var subLabel = new Label
         {
-            Location = new Point(36, 176),
-            Size = new Size(78, 2),
-            BackColor = Color.FromArgb(50, 54, 70)
+            Text = "Print Agent Setup",
+            Location = new Point(8, 112),
+            Width = SIDE_W - 16,
+            Height = 18,
+            TextAlign = ContentAlignment.MiddleCenter,
+            ForeColor = ClrMuted,
+            Font = new Font("Segoe UI", 8)
         };
-        sidePanel.Controls.Add(sideLine);
 
-        sidePanel.Controls.AddRange([sideIcon, sideTitle, sideSub, welcomeStep, installStep, completeStep]);
-
-        // ── Header ──
-        headerPanel = new Panel
+        // Separator
+        var sep = new Panel
         {
-            Dock = DockStyle.Top,
-            Height = 80,
-            BackColor = BgHeader
+            Location = new Point(20, 148),
+            Size = new Size(SIDE_W - 40, 1),
+            BackColor = Color.FromArgb(50, 52, 58)
         };
-        titleLabel = new Label
+
+        // Step indicators using numbered circles
+        step1Label = CreateStepLabel("Welcome", 1, 170);
+        step2Label = CreateStepLabel("Install", 2, 205);
+        step3Label = CreateStepLabel("Complete", 3, 240);
+
+        sidePanel.Controls.AddRange([iconBox, appLabel, subLabel, sep, step1Label, step2Label, step3Label]);
+    }
+
+    private static Label CreateStepLabel(string text, int number, int y)
+    {
+        return new Label
         {
-            Location = new Point(24, 24),
+            Text = $"  {number}   {text}",
+            Location = new Point(12, y),
             AutoSize = true,
-            Text = "Welcome",
-            Font = new Font("Segoe UI", 18, FontStyle.Bold),
-            ForeColor = FgPrimary
+            Font = new Font("Segoe UI", 10),
+            ForeColor = ClrDim
         };
-        headerPanel.Controls.Add(titleLabel);
+    }
 
-        // ── Bottom bar ──
+    // ──────────────────────────────────────────────
+    //  BOTTOM BAR
+    // ──────────────────────────────────────────────
+    private void BuildBottomBar()
+    {
         bottomPanel = new Panel
         {
             Dock = DockStyle.Bottom,
-            Height = 56,
-            BackColor = BgPanel
+            Height = 54,
+            BackColor = ClrBottom
+        };
+
+        // Top border line
+        var topLine = new Panel
+        {
+            Dock = DockStyle.Top,
+            Height = 1,
+            BackColor = Color.FromArgb(48, 50, 56)
         };
 
         cancelBtn = new Button
         {
             Text = "Cancel",
-            Location = new Point(FORM_W - 190 - 120, 13),
-            Size = new Size(100, 30),
             FlatStyle = FlatStyle.Flat,
-            BackColor = Color.FromArgb(50, 54, 70),
-            ForeColor = FgSecondary,
-            FlatAppearance = { BorderColor = Color.FromArgb(70, 74, 90) },
-            Cursor = Cursors.Hand
+            BackColor = Color.FromArgb(45, 47, 53),
+            ForeColor = ClrMuted,
+            FlatAppearance = { BorderColor = Color.FromArgb(65, 67, 73) },
+            Cursor = Cursors.Hand,
+            Size = new Size(90, 28),
+            Font = new Font("Segoe UI", 9)
         };
-        cancelBtn.Click += (_, _) => Application.Exit();
+        cancelBtn.Click += (_, _) => Close();
 
         installBtn = new Button
         {
             Text = "Install",
-            Location = new Point(FORM_W - 190, 13),
-            Size = new Size(170, 30),
             FlatStyle = FlatStyle.Flat,
-            BackColor = Accent,
+            BackColor = ClrPrimary,
             ForeColor = Color.White,
-            FlatAppearance = { BorderColor = Accent },
+            FlatAppearance = { BorderColor = ClrPrimary },
             Cursor = Cursors.Hand,
-            Font = new Font("Segoe UI", 10, FontStyle.Bold)
+            Size = new Size(150, 28),
+            Font = new Font("Segoe UI", 9, FontStyle.Bold)
         };
         installBtn.Click += OnInstallClick;
 
-        bottomPanel.Controls.AddRange([cancelBtn, installBtn]);
-
-        // ── Content ──
-        contentPanel = new Panel
-        {
-            Dock = DockStyle.Fill,
-            BackColor = BgDark,
-            Padding = new Padding(32, 16, 32, 0)
-        };
-
-        Controls.AddRange([sidePanel, headerPanel, contentPanel, bottomPanel]);
-
-        ShowWelcome();
+        bottomPanel.Controls.AddRange([topLine, cancelBtn, installBtn]);
+        bottomPanel.Resize += (_, _) => RepositionBottomButtons();
     }
 
-    private static Icon? LoadAppIcon()
+    private void RepositionBottomButtons()
     {
-        try
+        var bw = bottomPanel.ClientSize.Width;
+        var gap = 8;
+        installBtn.Location = new Point(bw - 16 - installBtn.Width, (bottomPanel.ClientSize.Height - installBtn.Height) / 2);
+        cancelBtn.Location = new Point(installBtn.Left - gap - cancelBtn.Width, (bottomPanel.ClientSize.Height - cancelBtn.Height) / 2);
+    }
+
+    // ──────────────────────────────────────────────
+    //  STEP TRACKING
+    // ──────────────────────────────────────────────
+    private void SetStep(int step)
+    {
+        currentStep = step;
+        var labels = new[] { step1Label, step2Label, step3Label };
+        for (int i = 0; i < labels.Length; i++)
         {
-            var asm = Assembly.GetExecutingAssembly();
-            var name = asm.GetManifestResourceNames().FirstOrDefault(r => r.EndsWith("book.ico", StringComparison.OrdinalIgnoreCase));
-            if (name != null)
-                using (var s = asm.GetManifestResourceStream(name)!)
-                    return new Icon(s);
+            bool active = i == step;
+            labels[i].ForeColor = active ? ClrPrimary : ClrDim;
+            labels[i].Font = new Font("Segoe UI", 10, active ? FontStyle.Bold : FontStyle.Regular);
         }
-        catch { }
-        return SystemIcons.Application;
-    }
-
-    private static Label CreateStepLabel(string text, int y)
-    {
-        return new Label
-        {
-            Text = text,
-            Location = new Point(16, y),
-            AutoSize = true,
-            Font = new Font("Segoe UI", 9),
-            ForeColor = FgMuted
-        };
-    }
-
-    private void SetStep(int s)
-    {
-        step = s;
-        welcomeStep.Text = (s >= WELCOME ? "\u25CF" : "\u25CB") + "  Welcome";
-        installStep.Text = (s >= INSTALLING ? "\u25CF" : "\u25CB") + "  Install";
-        completeStep.Text = (s >= COMPLETE ? "\u25CF" : "\u25CB") + "  Complete";
-        welcomeStep.ForeColor = s >= WELCOME ? Accent : FgMuted;
-        installStep.ForeColor = s >= INSTALLING ? Accent : FgMuted;
-        completeStep.ForeColor = s >= COMPLETE ? Accent : FgMuted;
     }
 
     private void ClearContent()
@@ -202,154 +214,252 @@ public class InstallerForm : Form
         launchCb = null!;
     }
 
-    // ============================================================
-    //  STEP 1: Welcome
-    // ============================================================
+    // ──────────────────────────────────────────────
+    //  WELCOME PAGE
+    // ──────────────────────────────────────────────
     private void ShowWelcome()
     {
-        SetStep(WELCOME);
+        SetStep(STEP_WELCOME);
         ClearContent();
-        titleLabel.Text = "Welcome";
         installBtn.Text = "Install";
-        cancelBtn.Text = "Cancel";
         installBtn.Enabled = true;
+        cancelBtn.Text = "Cancel";
         cancelBtn.Enabled = true;
 
-        var desc = new Label
+        var cp = contentPanel;
+        var cw = cp.ClientSize.Width - cp.Padding.Horizontal;
+
+        // Title
+        var welcomeTitle = new Label
         {
-            Text = "This wizard will install the " + APP_NAME + " Print Agent on your computer.\n\nThe agent runs in the background and allows printing books directly from the web portal to your local printer.",
+            Text = "Welcome to the " + APP_NAME + " Setup Wizard",
             Location = new Point(0, 4),
-            Size = new Size(FORM_W - 220, 60),
-            ForeColor = FgSecondary
+            Size = new Size(cw, 28),
+            Font = new Font("Segoe UI", 15, FontStyle.Bold),
+            ForeColor = ClrText
         };
 
-        var infoTitle = new Label
+        var welcomeDesc = new Label
         {
-            Text = "Installation includes:",
-            Location = new Point(0, 80),
-            AutoSize = true,
-            ForeColor = FgPrimary,
-            Font = new Font("Segoe UI", 10, FontStyle.Bold)
+            Text = "This wizard will install the print agent on your computer.\nThe agent runs in the background to enable printing from the portal.",
+            Location = new Point(0, 38),
+            Size = new Size(cw, 40),
+            ForeColor = ClrMuted
+        };
+
+        // Section: What's included
+        var sectionTitle = new Label
+        {
+            Text = "What\u2019s included",
+            Location = new Point(0, 96),
+            Size = new Size(cw, 20),
+            Font = new Font("Segoe UI", 11, FontStyle.Bold),
+            ForeColor = ClrText
         };
 
         var items = new[]
         {
-            ("\u2713", "Print agent service", "Auto-starts on boot via Windows Scheduled Task"),
-            ("\u2713", "Desktop shortcut", "Double-click to open the agent dashboard"),
-            ("\u2713", "Printer detection", "Automatically detects USB, WiFi, and LAN printers"),
-            ("\u2713", "System tray app", "Manage the agent from the notification area"),
-            ("\u2713", "Automatic updates", "Replace existing files on re-installation")
+            ("Print Agent Service",    "Runs at startup; listens for print jobs from the portal"),
+            ("Agent Dashboard",        "Desktop UI to monitor status and queued jobs"),
+            ("Printer Detection",      "Detects USB, WiFi, and network printers automatically"),
+            ("System Tray App",        "Quick access from the notification area"),
         };
 
-        var y = 110;
-        foreach (var (check, title, sub) in items)
+        var y = 126;
+        foreach (var (item, desc) in items)
         {
-            var c = new Label
+            // Colored bullet
+            var bullet = new Label
             {
-                Text = check,
-                Location = new Point(0, y),
+                Text = "\u25CF",
+                Location = new Point(2, y),
                 AutoSize = true,
-                ForeColor = Accent,
-                Font = new Font("Segoe UI", 12, FontStyle.Bold)
+                ForeColor = ClrPrimary,
+                Font = new Font("Segoe UI", 10)
             };
-            var t = new Label
+            var itemLabel = new Label
             {
-                Text = title,
-                Location = new Point(24, y),
+                Text = item,
+                Location = new Point(20, y),
                 AutoSize = true,
-                ForeColor = FgPrimary
+                ForeColor = ClrText,
+                Font = new Font("Segoe UI", 10)
             };
-            var s = new Label
+            var descLabel = new Label
             {
-                Text = sub,
-                Location = new Point(24, y + 18),
+                Text = desc,
+                Location = new Point(20, y + 16),
                 AutoSize = true,
-                ForeColor = FgMuted,
-                Font = new Font("Segoe UI", 8)
+                ForeColor = ClrMuted,
+                Font = new Font("Segoe UI", 9)
             };
-            contentPanel.Controls.AddRange([c, t, s]);
+            cp.Controls.AddRange([bullet, itemLabel, descLabel]);
             y += 44;
         }
+
+        // Note about existing installation
+        var note = new Label
+        {
+            Text = "Tip: Running this installer again will replace existing files and update\nthe scheduled task without losing your configuration.",
+            Location = new Point(0, y + 8),
+            Size = new Size(cw, 32),
+            ForeColor = ClrDim,
+            Font = new Font("Segoe UI", 8)
+        };
+        cp.Controls.AddRange([welcomeTitle, welcomeDesc, sectionTitle, note]);
     }
 
-    // ============================================================
-    //  STEP 2: Install
-    // ============================================================
+    // ──────────────────────────────────────────────
+    //  INSTALL PAGE
+    // ──────────────────────────────────────────────
     private void ShowInstalling()
     {
-        SetStep(INSTALLING);
+        SetStep(STEP_INSTALL);
         ClearContent();
-        titleLabel.Text = "Installing...";
         installBtn.Enabled = false;
         installBtn.Text = "Installing\u2026";
         cancelBtn.Enabled = false;
 
-        var spinner = new Label
+        var cp = contentPanel;
+        var cw = cp.ClientSize.Width - cp.Padding.Horizontal;
+
+        var instTitle = new Label
         {
-            Text = "\u25E0\u25E1\u25E2\u25E3",
-            Font = new Font("Segoe UI", 28),
-            Location = new Point(FORM_W / 2 - 200 - 60, 20),
-            AutoSize = true,
-            ForeColor = Accent
+            Text = "Installing " + APP_NAME + " Print Agent",
+            Location = new Point(0, 12),
+            Size = new Size(cw, 24),
+            Font = new Font("Segoe UI", 13, FontStyle.Bold),
+            ForeColor = ClrText
+        };
+
+        var instDesc = new Label
+        {
+            Text = "Please wait while the installation completes.",
+            Location = new Point(0, 40),
+            Size = new Size(cw, 18),
+            ForeColor = ClrMuted,
+            Font = new Font("Segoe UI", 9)
         };
 
         progressBar = new ProgressBar
         {
-            Location = new Point(0, 80),
-            Size = new Size(FORM_W - 280, 24),
+            Location = new Point(0, 72),
+            Width = cw,
+            Height = 24,
             Style = ProgressBarStyle.Continuous,
             Minimum = 0,
             Maximum = 100,
-            ForeColor = Accent,
-            BackColor = Color.FromArgb(40, 44, 58)
+            ForeColor = ClrPrimary,
+            BackColor = Color.FromArgb(40, 42, 48)
         };
 
         statusLabel = new Label
         {
             Text = "Preparing...",
-            Location = new Point(0, 114),
+            Location = new Point(0, 104),
             AutoSize = true,
-            ForeColor = FgSecondary
+            ForeColor = ClrText,
+            Font = new Font("Segoe UI", 10)
         };
 
-        var statusDetail = new Label
+        cp.Controls.AddRange([instTitle, instDesc, progressBar, statusLabel]);
+    }
+
+    // ──────────────────────────────────────────────
+    //  COMPLETE PAGE
+    // ──────────────────────────────────────────────
+    private void ShowCompleted()
+    {
+        SetStep(STEP_DONE);
+        ClearContent();
+        installBtn.Text = "Finish";
+        installBtn.Enabled = true;
+        cancelBtn.Text = "Close";
+        cancelBtn.Enabled = true;
+
+        var cp = contentPanel;
+        var cw = cp.ClientSize.Width - cp.Padding.Horizontal;
+
+        // Large checkmark
+        var checkIcon = new Label
         {
-            Text = "Please wait while the installation completes.",
-            Location = new Point(0, 138),
+            Text = "\u2714",
+            Font = new Font("Segoe UI", 40, FontStyle.Bold),
+            Location = new Point(0, 16),
             AutoSize = true,
-            ForeColor = FgMuted,
+            ForeColor = ClrPrimary
+        };
+
+        var doneTitle = new Label
+        {
+            Text = APP_NAME + " Print Agent",
+            Location = new Point(4, 68),
+            Size = new Size(cw - 8, 22),
+            Font = new Font("Segoe UI", 15, FontStyle.Bold),
+            ForeColor = ClrText
+        };
+
+        var doneDesc = new Label
+        {
+            Text = "has been installed successfully.\nThe agent is running and ready to receive print jobs.",
+            Location = new Point(4, 94),
+            Size = new Size(cw - 8, 36),
+            ForeColor = ClrMuted
+        };
+
+        shortcutCb = new CheckBox
+        {
+            Text = "Create a desktop shortcut",
+            Location = new Point(2, 148),
+            AutoSize = true,
+            Checked = true,
+            ForeColor = ClrText,
+            Font = new Font("Segoe UI", 10)
+        };
+
+        launchCb = new CheckBox
+        {
+            Text = "Open the agent dashboard",
+            Location = new Point(2, 174),
+            AutoSize = true,
+            Checked = true,
+            ForeColor = ClrText,
+            Font = new Font("Segoe UI", 10)
+        };
+
+        var trayNote = new Label
+        {
+            Text = "You can also manage the agent from the system tray.",
+            Location = new Point(4, 206),
+            AutoSize = true,
+            ForeColor = ClrDim,
             Font = new Font("Segoe UI", 9)
         };
 
-        contentPanel.Controls.AddRange([progressBar, statusLabel, statusDetail]);
+        cp.Controls.AddRange([checkIcon, doneTitle, doneDesc, shortcutCb, launchCb, trayNote]);
+
+        CreateDesktopShortcut();
     }
 
+    // ──────────────────────────────────────────────
+    //  INSTALL LOGIC
+    // ──────────────────────────────────────────────
     private async void OnInstallClick(object? sender, EventArgs e)
     {
-        if (step == WELCOME)
+        if (currentStep == STEP_WELCOME)
         {
             ShowInstalling();
             await RunInstallation();
             ShowCompleted();
         }
-        else if (step == COMPLETE)
+        else if (currentStep == STEP_DONE)
         {
             if (launchCb?.Checked == true)
             {
-                var installDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "BookShopPrintAgent");
-                try
-                {
-                    Process.Start(new ProcessStartInfo
-                    {
-                        FileName = Path.Combine(installDir, "BookShopAgentUI.exe"),
-                        WorkingDirectory = installDir,
-                        WindowStyle = ProcessWindowStyle.Hidden,
-                        CreateNoWindow = true
-                    });
-                }
-                catch { }
+                var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "BookShopPrintAgent");
+                try { Process.Start(Path.Combine(dir, "BookShopAgentUI.exe")); } catch { }
             }
-            Application.Exit();
+            Close();
         }
     }
 
@@ -357,78 +467,53 @@ public class InstallerForm : Form
     {
         try
         {
-            var resourceDir = Path.Combine(Path.GetTempPath(), "BkSetup_" + Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(resourceDir);
+            var tmpDir = Path.Combine(Path.GetTempPath(), "BkSetup_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(tmpDir);
 
-            // ── Extract resources ──
-            await ReportProgress(5, "Extracting installation files...");
+            await SetProgress(5, "Extracting files...");
+            ExtractResource("BookShopPrintAgent.exe", tmpDir);
+            ExtractResource("BookShopAgentUI.exe", tmpDir);
+            ExtractResource("SumatraPDF-3.6.1-64.exe", tmpDir);
+            ExtractResource("appsettings.json", tmpDir);
+            ExtractResource("book.ico", tmpDir);
 
-            ExtractResource("BookShopPrintAgent.exe", resourceDir);
-            ExtractResource("BookShopAgentUI.exe", resourceDir);
-            ExtractResource("SumatraPDF-3.6.1-64.exe", resourceDir);
-            ExtractResource("appsettings.json", resourceDir);
-            ExtractResource("book.ico", resourceDir);
-
-            // ── Prepare install directory ──
-            await ReportProgress(15, "Preparing destination...");
-
-            var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
-            var installDir = Path.Combine(programFiles, "BookShopPrintAgent");
+            await SetProgress(15, "Preparing destination...");
+            var installDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "BookShopPrintAgent");
             Directory.CreateDirectory(installDir);
 
-            // ── Kill running processes ──
-            await ReportProgress(25, "Stopping any running agent processes...");
+            await SetProgress(25, "Stopping running agents...");
+            KillProc("BookShopPrintAgent");
+            KillProc("BookShopAgentUI");
+            await Task.Delay(500);
 
-            KillProcess("BookShopPrintAgent");
-            KillProcess("BookShopAgentUI");
-            await Task.Delay(800);
+            await SetProgress(35, "Cleaning previous installation...");
+            foreach (var f in Directory.GetFiles(installDir, "*.dll")) SafeDelete(f);
+            foreach (var f in Directory.GetFiles(installDir, "*.pdb")) SafeDelete(f);
+            SafeDelete(Path.Combine(installDir, "BookShopPrintAgent.deps.json"));
+            SafeDelete(Path.Combine(installDir, "BookShopPrintAgent.runtimeconfig.json"));
 
-            // ── Copy files ──
-            await ReportProgress(35, "Cleaning old files...");
-            // Remove old framework-dependent DLLs that conflict with single-file publish
-            foreach (var oldFile in Directory.GetFiles(installDir, "*.dll"))
-            {
-                try { File.Delete(oldFile); } catch { }
-            }
-            foreach (var oldFile in Directory.GetFiles(installDir, "*.pdb"))
-            {
-                try { File.Delete(oldFile); } catch { }
-            }
-            try { File.Delete(Path.Combine(installDir, "BookShopPrintAgent.deps.json")); } catch { }
-            try { File.Delete(Path.Combine(installDir, "BookShopPrintAgent.runtimeconfig.json")); } catch { }
-            await Task.Delay(50);
+            await SetProgress(40, "Copying print agent...");
+            File.Copy(Path.Combine(tmpDir, "BookShopPrintAgent.exe"), Path.Combine(installDir, "BookShopPrintAgent.exe"), true);
 
-            await ReportProgress(40, "Copying agent files...");
-            File.Copy(Path.Combine(resourceDir, "BookShopPrintAgent.exe"), Path.Combine(installDir, "BookShopPrintAgent.exe"), true);
-            await Task.Delay(50);
+            await SetProgress(52, "Copying dashboard...");
+            File.Copy(Path.Combine(tmpDir, "BookShopAgentUI.exe"), Path.Combine(installDir, "BookShopAgentUI.exe"), true);
 
-            await ReportProgress(45, "Copying agent UI...");
-            File.Copy(Path.Combine(resourceDir, "BookShopAgentUI.exe"), Path.Combine(installDir, "BookShopAgentUI.exe"), true);
-            await Task.Delay(50);
+            await SetProgress(62, "Copying printer engine...");
+            File.Copy(Path.Combine(tmpDir, "SumatraPDF-3.6.1-64.exe"), Path.Combine(installDir, "SumatraPDF-3.6.1-64.exe"), true);
 
-            await ReportProgress(48, "Copying SumatraPDF printer engine...");
-            File.Copy(Path.Combine(resourceDir, "SumatraPDF-3.6.1-64.exe"), Path.Combine(installDir, "SumatraPDF-3.6.1-64.exe"), true);
-            await Task.Delay(50);
+            await SetProgress(70, "Writing configuration...");
+            var cfg = Path.Combine(installDir, "appsettings.json");
+            if (!File.Exists(cfg)) File.Copy(Path.Combine(tmpDir, "appsettings.json"), cfg, true);
+            File.Copy(Path.Combine(tmpDir, "book.ico"), Path.Combine(installDir, "book.ico"), true);
 
-            await ReportProgress(50, "Copying configuration (preserving existing)...");
-            var destConfig = Path.Combine(installDir, "appsettings.json");
-            if (!File.Exists(destConfig))
-                File.Copy(Path.Combine(resourceDir, "appsettings.json"), destConfig, true);
+            await SetProgress(78, "Creating scheduled task...");
+            RunCmd("schtasks", "/create /tn \"BookShopPrintAgent\" /tr \"'" + Path.Combine(installDir, "BookShopPrintAgent.exe") + "'\" /sc onstart /ru SYSTEM /rl highest /f");
 
-            await ReportProgress(55, "Copying application icon...");
-            File.Copy(Path.Combine(resourceDir, "book.ico"), Path.Combine(installDir, "book.ico"), true);
-
-            // ── Create scheduled task ──
-            await ReportProgress(65, "Creating scheduled task (auto-start on boot)...");
-            RunProcess("schtasks", "/create /tn \"BookShopPrintAgent\" /tr \"'" + Path.Combine(installDir, "BookShopPrintAgent.exe") + "'\" /sc onstart /ru SYSTEM /rl highest /f");
-
-            // ── Create uninstaller ──
-            await ReportProgress(80, "Registering uninstaller...");
-            CreateUninstallScript(installDir);
+            await SetProgress(86, "Registering uninstaller...");
+            WriteUninstallScript(installDir);
             RegisterUninstall(installDir);
 
-            // ── Start agent UI ──
-            await ReportProgress(90, "Starting agent...");
+            await SetProgress(94, "Starting dashboard...");
             Process.Start(new ProcessStartInfo
             {
                 FileName = Path.Combine(installDir, "BookShopAgentUI.exe"),
@@ -437,126 +522,51 @@ public class InstallerForm : Form
                 CreateNoWindow = true
             });
 
-            await ReportProgress(100, "Installation complete!");
-            await Task.Delay(400);
+            await SetProgress(100, "Done!");
+            await Task.Delay(300);
 
-            try { Directory.Delete(resourceDir, true); } catch { }
+            SafeDeleteDir(tmpDir);
         }
         catch (Exception ex)
         {
             MessageBox.Show("Installation failed:\n" + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            Application.Exit();
+            Close();
         }
     }
 
-    private async Task ReportProgress(int value, string status)
+    private async Task SetProgress(int value, string text)
     {
-        if (progressBar != null && !progressBar.IsDisposed)
-        {
-            progressBar.Value = Math.Clamp(value, 0, 100);
-            statusLabel.Text = status;
-        }
-        await Task.Delay(80);
+        if (progressBar is { IsDisposed: false }) progressBar.Value = Math.Clamp(value, 0, 100);
+        if (statusLabel is { IsDisposed: false }) statusLabel.Text = text;
+        await Task.Delay(60);
     }
 
-    // ============================================================
-    //  STEP 3: Complete
-    // ============================================================
-    private void ShowCompleted()
-    {
-        SetStep(COMPLETE);
-        ClearContent();
-        titleLabel.Text = "Setup Complete";
-        installBtn.Text = "Finish";
-        cancelBtn.Text = "Close";
-        installBtn.Enabled = true;
-        cancelBtn.Enabled = true;
-
-        var checkIcon = new Label
-        {
-            Text = "\u2713",
-            Font = new Font("Segoe UI", 48, FontStyle.Bold),
-            Location = new Point(FORM_W / 2 - 200 - 80, 12),
-            AutoSize = true,
-            ForeColor = Accent
-        };
-
-        var completeTitle = new Label
-        {
-            Text = APP_NAME + " Print Agent",
-            Location = new Point(0, 76),
-            AutoSize = true,
-            Font = new Font("Segoe UI", 16, FontStyle.Bold),
-            ForeColor = FgPrimary
-        };
-
-        var completeDesc = new Label
-        {
-            Text = "has been successfully installed on your computer.\nThe agent is now running in the background and ready to receive print jobs from the portal.",
-            Location = new Point(0, 108),
-            Size = new Size(FORM_W - 220, 52),
-            ForeColor = FgSecondary
-        };
-
-        shortcutCb = new CheckBox
-        {
-            Text = "Create desktop shortcut",
-            Location = new Point(0, 174),
-            AutoSize = true,
-            ForeColor = FgPrimary,
-            Checked = true,
-            Font = new Font("Segoe UI", 10)
-        };
-
-        launchCb = new CheckBox
-        {
-            Text = "Launch agent dashboard now",
-            Location = new Point(0, 200),
-            AutoSize = true,
-            ForeColor = FgPrimary,
-            Checked = true,
-            Font = new Font("Segoe UI", 10)
-        };
-
-        var note = new Label
-        {
-            Text = "You can also manage the agent from the system tray.",
-            Location = new Point(0, 236),
-            AutoSize = true,
-            ForeColor = FgMuted,
-            Font = new Font("Segoe UI", 9)
-        };
-
-        contentPanel.Controls.AddRange([checkIcon, completeTitle, completeDesc, shortcutCb, launchCb, note]);
-
-        // Create shortcut now (before user clicks Finish) so it's ready
-        CreateDesktopShortcut();
-    }
-
-    // ============================================================
+    // ──────────────────────────────────────────────
     //  HELPERS
-    // ============================================================
-
-    private static void KillProcess(string name)
-    {
-        foreach (var p in Process.GetProcessesByName(name))
-        {
-            try { p.Kill(); p.WaitForExit(3000); } catch { }
-        }
-    }
-
-    private static void RunProcess(string file, string args)
+    // ──────────────────────────────────────────────
+    private static Icon? LoadAppIcon()
     {
         try
         {
-            using var p = Process.Start(new ProcessStartInfo
-            {
-                FileName = file,
-                Arguments = args,
-                WindowStyle = ProcessWindowStyle.Hidden,
-                CreateNoWindow = true,
-                Verb = "runas"
-            });
+            var asm = Assembly.GetExecutingAssembly();
+            var name = asm.GetManifestResourceNames().FirstOrDefault(r => r.EndsWith("book.ico", StringComparison.OrdinalIgnoreCase));
+            if (name != null) using (var s = asm.GetManifestResourceStream(name)!) return new Icon(s);
+        }
+        catch { }
+        return SystemIcons.Application;
+    }
+
+    private static void KillProc(string name)
+    {
+        foreach (var p in Process.GetProcessesByName(name))
+            try { p.Kill(); p.WaitForExit(3000); } catch { }
+    }
+
+    private static void RunCmd(string file, string args)
+    {
+        try
+        {
+            using var p = Process.Start(new ProcessStartInfo(file, args) { WindowStyle = ProcessWindowStyle.Hidden, CreateNoWindow = true, Verb = "runas" });
             p?.WaitForExit(10000);
         }
         catch { }
@@ -570,85 +580,54 @@ public class InstallerForm : Form
         throw new InvalidOperationException("Resource not found: " + name);
     }
 
-    private static void ExtractResource(string name, string destDir)
+    private static void ExtractResource(string name, string dir)
     {
         var asm = Assembly.GetExecutingAssembly();
-        var fullName = FindResource(name);
-        using var stream = asm.GetManifestResourceStream(fullName);
-        if (stream == null) return;
-        var path = Path.Combine(destDir, name);
-        using var file = File.Create(path);
+        var full = FindResource(name);
+        using var stream = asm.GetManifestResourceStream(full)!;
+        using var file = File.Create(Path.Combine(dir, name));
         stream.CopyTo(file);
     }
 
-    // ============================================================
-    //  SHORTCUT
-    // ============================================================
+    private static void SafeDelete(string path) { try { File.Delete(path); } catch { } }
+    private static void SafeDeleteDir(string path) { try { Directory.Delete(path, true); } catch { } }
+
     private void CreateDesktopShortcut()
     {
         try
         {
             var desktop = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
             var installDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "BookShopPrintAgent");
-            var shortcutPath = Path.Combine(desktop, "DR Bahig Books Portal.lnk");
-            var uiExe = Path.Combine(installDir, "BookShopAgentUI.exe");
+            var target = Path.Combine(installDir, "BookShopAgentUI.exe");
             var iconPath = Path.Combine(installDir, "book.ico");
-            if (!File.Exists(uiExe)) return;
+            if (!File.Exists(target)) return;
 
-            // Use WScript.Shell COM object via PowerShell
-            var ps = "$s=(New-Object -ComObject WScript.Shell).CreateShortcut('" + shortcutPath.Replace("'", "''") + "');" +
-                     "$s.TargetPath='" + uiExe.Replace("'", "''") + "';" +
-                     "$s.WorkingDirectory='" + installDir.Replace("'", "''") + "';" +
-                     "$s.Description='Double-click to open the " + APP_NAME + " Print Agent dashboard. The agent starts automatically.';" +
-                     "$s.IconLocation='" + iconPath.Replace("'", "''") + "';" +
-                     "$s.Save()";
-
-            Process.Start(new ProcessStartInfo
-            {
-                FileName = "powershell",
-                Arguments = "-NoProfile -Command \"" + ps + "\"",
-                WindowStyle = ProcessWindowStyle.Hidden,
-                CreateNoWindow = true
-            });
+            var shortcut = Path.Combine(desktop, "DR Bahig Books Portal.lnk");
+            var ps = $"$s=(New-Object -ComObject WScript.Shell).CreateShortcut('{shortcut.Replace("'", "''")}');" +
+                     $"$s.TargetPath='{target.Replace("'", "''")}';" +
+                     $"$s.WorkingDirectory='{installDir.Replace("'", "''")}';" +
+                     $"$s.Description='Print Agent for DR Bahig Books Portal';" +
+                     $"$s.IconLocation='{iconPath.Replace("'", "''")}';$s.Save()";
+            Process.Start(new ProcessStartInfo("powershell", "-NoProfile -Command \"" + ps + "\"") { WindowStyle = ProcessWindowStyle.Hidden, CreateNoWindow = true });
         }
         catch { }
     }
 
-    // ============================================================
-    //  UNINSTALL
-    // ============================================================
-    private static void CreateUninstallScript(string installDir)
+    private static void WriteUninstallScript(string installDir)
     {
-        var psPath = Path.Combine(installDir, "uninstall.ps1");
-        var psContent = @"# DR Bahig Books Portal Print Agent - Uninstaller
+        var path = Path.Combine(installDir, "uninstall.ps1");
+        var content = @"# DR Bahig Books Portal Print Agent - Uninstaller
 $dir = '" + installDir.Replace("'", "''") + @"'
-$taskName = 'BookShopPrintAgent'
-
-Write-Host 'Uninstalling DR Bahig Books Portal Print Agent...' -ForegroundColor Cyan
-
-# Kill processes
 Stop-Process -Name 'BookShopPrintAgent' -Force -ErrorAction SilentlyContinue
 Stop-Process -Name 'BookShopAgentUI' -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 1
-
-# Remove scheduled task
-& schtasks /delete /tn $taskName /f 2>`$null
-
-# Remove desktop shortcut
-$shortcut = Join-Path ([Environment]::GetFolderPath('Desktop')) 'DR Bahig Books Portal.lnk'
-Remove-Item $shortcut -Force -ErrorAction SilentlyContinue
-
-# Remove install directory
+& schtasks /delete /tn 'BookShopPrintAgent' /f 2>$null
+Remove-Item (Join-Path ([Environment]::GetFolderPath('Desktop')) 'DR Bahig Books Portal.lnk') -Force -ErrorAction SilentlyContinue
 Remove-Item $dir -Recurse -Force -ErrorAction SilentlyContinue
-
-# Remove uninstall registry keys
-reg delete 'HKLM\Software\Microsoft\Windows\CurrentVersion\Uninstall\DR Bahig Books Portal' /f 2>`$null
-reg delete 'HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\DR Bahig Books Portal' /f 2>`$null
-
-Write-Host 'Uninstall complete.' -ForegroundColor Green
-Start-Sleep -Seconds 2
+reg delete 'HKLM\Software\Microsoft\Windows\CurrentVersion\Uninstall\DR Bahig Books Portal' /f 2>$null
+reg delete 'HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\DR Bahig Books Portal' /f 2>$null
 ";
-        File.WriteAllText(psPath, psContent);
+        File.WriteAllText(path, content);
     }
 
     private static void RegisterUninstall(string installDir)

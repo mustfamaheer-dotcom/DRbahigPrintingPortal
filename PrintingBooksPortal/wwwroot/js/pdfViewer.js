@@ -206,7 +206,12 @@
                 statusText.textContent = msg || 'Agent not running';
                 statusText.className = 'printer-status-text offline';
             }
+            callback();
         }
+
+        var baseUrl = 'http://localhost:8080';
+        var altUrl = 'http://127.0.0.1:8080';
+        var healthUrl = baseUrl + '/api/print-job/health';
 
         function tryFetch(url) {
             return fetch(url, { mode: 'cors', cache: 'no-cache' }).then(function (r) {
@@ -214,25 +219,6 @@
                 return r.json();
             });
         }
-
-        var primary = 'http://localhost:8080/api/print-job/printers';
-        var fallback = 'http://127.0.0.1:8080/api/print-job/printers';
-
-        tryFetch(primary).then(function (data) {
-            onPrintersFetched(data);
-        }).catch(function (err1) {
-            console.warn('[PrintAgent] Primary fetch failed:', err1);
-            tryFetch(fallback).then(function (data) {
-                onPrintersFetched(data);
-            }).catch(function (err2) {
-                console.warn('[PrintAgent] Fallback fetch also failed:', err2);
-                tryFetch('http://localhost:8080/api/print-job/health').then(function () {
-                    setOffline('Agent detected — printers endpoint missing (old version)');
-                }).catch(function () {
-                    setOffline('Agent not running — double-click the desktop shortcut');
-                });
-            });
-        });
 
         function onPrintersFetched(data) {
             select.innerHTML = '<option value="">Select a printer…</option>';
@@ -265,6 +251,25 @@
             }
             callback();
         }
+
+        // Single health check first — avoids 3 sequential fetch failures when agent is offline
+        fetch(healthUrl, { mode: 'cors', cache: 'no-cache' }).then(function (r) {
+            if (!r.ok) throw new Error();
+            // Agent is alive — fetch printers now
+            tryFetch(baseUrl + '/api/print-job/printers').then(function (data) {
+                onPrintersFetched(data);
+            }).catch(function () {
+                // Primary port failed, try alternate port
+                tryFetch(altUrl + '/api/print-job/printers').then(function (data) {
+                    onPrintersFetched(data);
+                }).catch(function () {
+                    setOffline('Agent detected — printers endpoint missing (old version)');
+                });
+            });
+        }).catch(function () {
+            // Agent is offline — show offline state without console noise
+            setOffline('Agent not running — double-click the desktop shortcut');
+        });
 
         var printerSelect = document.getElementById('printerSelect');
         if (printerSelect) {
@@ -448,6 +453,7 @@
         script.src = '/js/pdf.min.js';
         script.onload = function () {
             pdfjsLib.GlobalWorkerOptions.workerSrc = '/js/pdf.worker.min.js';
+            if (pdfjsLib.VerbosityLevel) pdfjsLib.verbosity = pdfjsLib.VerbosityLevel.ERRORS;
             callback();
         };
         script.onerror = function () {

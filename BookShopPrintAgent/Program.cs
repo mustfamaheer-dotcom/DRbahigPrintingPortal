@@ -119,6 +119,7 @@ _ = Task.Run(async () =>
                             PrinterName = effectivePrinter,
                             Copies = copies,
                             ScalingMode = claimResult?.ScalingMode ?? "actual",
+                            CustomScale = claimResult?.CustomScale ?? 100,
                             Duplex = claimResult?.Duplex ?? "off",
                             PaperSize = claimResult?.PaperSize ?? "A4",
                             MarginUnit = claimResult?.MarginUnit ?? "mm",
