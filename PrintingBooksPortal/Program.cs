@@ -37,7 +37,7 @@ builder.Services.ConfigureApplicationCookie(options =>
     options.LogoutPath = "/logout";
     options.AccessDeniedPath = "/access-denied";
     options.Cookie.HttpOnly = true;
-    options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
     options.Cookie.SameSite = SameSiteMode.Strict;
     options.Cookie.IsEssential = true;
     options.ExpireTimeSpan = TimeSpan.FromHours(8);
@@ -109,7 +109,6 @@ try
     {
         try
         {
-            // Ensure missing columns exist on AspNetUsers (legacy schema fix)
             await db.Database.ExecuteSqlRawAsync(@"
                 IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='AspNetUsers' AND COLUMN_NAME='Role')
                 ALTER TABLE [AspNetUsers] ADD [Role] int NOT NULL DEFAULT 0;
@@ -122,27 +121,23 @@ try
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "Schema fix could not be applied.");
-        }
-
-        try
-        {
-            await db.Database.MigrateAsync();
-            logger.LogInformation("Database migrations applied successfully.");
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "Could not apply migrations automatically.");
+            logger.LogWarning(ex, "Schema fix could not be applied (columns may already exist).");
         }
     }
-    else
+
+    try
     {
-        await db.Database.EnsureCreatedAsync();
+        await db.Database.MigrateAsync();
+        logger.LogInformation("Database migrations applied successfully.");
+    }
+    catch (Exception ex)
+    {
+        logger.LogWarning(ex, "Could not apply pending migrations. The schema fix columns were already added manually.");
     }
 
     var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
     var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
-    await DbSeeder.SeedAsync(db, userManager, roleManager);
+    await DbSeeder.SeedAsync(db, userManager, roleManager, logger);
     logger.LogInformation("Database initialization completed.");
 }
 catch (Exception ex)
