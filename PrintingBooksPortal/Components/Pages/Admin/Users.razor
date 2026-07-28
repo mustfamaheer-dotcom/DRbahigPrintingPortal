@@ -64,12 +64,12 @@
                         }
                     </select>
                 </div>
-                @if (editRole == "Shop")
+                @if (editRole == "BookshopManager")
                 {
                     <div class="mb-3">
-                        <label class="form-label">Shop</label>
+                        <label class="form-label">Bookshop</label>
                         <select @bind="editShopId" class="form-control form-control-modern">
-                            <option value="">-- Select Shop --</option>
+                            <option value="">-- Select Bookshop --</option>
                             @foreach (var s in shops)
                             {
                                 <option value="@s.Id">@s.Name</option>
@@ -77,7 +77,7 @@
                         </select>
                         @if (!editing)
                         {
-                            <small class="text-muted">Need a shop? <a href="/admin/shops">Create one first</a>.</small>
+                            <small class="text-muted">Need a bookshop? <a href="/admin/shops">Create one first</a>.</small>
                         }
                     </div>
                 }
@@ -121,7 +121,7 @@
                                 <th>Email</th>
                                 <th>Name</th>
                                 <th>Role</th>
-                                <th>Shop</th>
+                                    <th>Teacher/Shop</th>
                                 <th>Email Confirmed</th>
                                 <th class="text-end">Actions</th>
                             </tr>
@@ -207,7 +207,10 @@
 
     private async Task LoadUsers()
     {
-        var appUsers = await UserManager.Users.Include(u => u.Teacher).OrderBy(u => u.Email).ToListAsync();
+        var appUsers = await UserManager.Users
+            .Include(u => u.Teacher)
+            .Include(u => u.Bookshop)
+            .OrderBy(u => u.Email).ToListAsync();
         users = [];
         foreach (var u in appUsers)
         {
@@ -218,7 +221,7 @@
                 Email = u.Email ?? "",
                 FullName = u.FullName ?? "",
                 Role = userRoles.FirstOrDefault() ?? "None",
-                ShopName = u.Teacher?.Name,
+                ShopName = u.Teacher?.Name ?? u.Bookshop?.Name,
                 EmailConfirmed = u.EmailConfirmed
             });
         }
@@ -245,14 +248,14 @@
         editFullName = u.FullName;
         editPassword = "";
         editRole = u.Role;
-                    editShopId = u.Role == "Shop" ? shops?.FirstOrDefault(s => s.Name == u.ShopName)?.Id : null;
+                    editShopId = u.Role == "BookshopManager" ? shops?.FirstOrDefault(s => s.Name == u.ShopName)?.Id : null;
         error = null;
         showModal = true;
     }
 
     private void OnRoleBound()
     {
-        if (editRole != "Shop")
+        if (editRole != "BookshopManager")
             editShopId = null;
     }
 
@@ -278,16 +281,28 @@
             if (!string.IsNullOrEmpty(editRole))
                 await UserManager.AddToRoleAsync(user, editRole);
 
-            if (editRole == "Shop")
+            if (editRole == "Teacher")
             {
-                user.TeacherId = editShopId;
-                await UserManager.UpdateAsync(user);
+                if (user.TeacherId == null)
+                {
+                    var teacher = new Teacher { Name = editFullName };
+                    Db.Teachers.Add(teacher);
+                    await Db.SaveChangesAsync();
+                    user.TeacherId = teacher.Id;
+                }
+                user.BookshopId = null;
+            }
+            else if (editRole == "BookshopManager")
+            {
+                user.BookshopId = editShopId;
+                user.TeacherId = null;
             }
             else
             {
                 user.TeacherId = null;
-                await UserManager.UpdateAsync(user);
+                user.BookshopId = null;
             }
+            await UserManager.UpdateAsync(user);
 
             message = $"User '{editEmail}' updated.";
         }
@@ -303,7 +318,7 @@
                 error = "Please select a role.";
                 return;
             }
-            if (editRole == "Shop" && editShopId == null)
+            if (editRole == "BookshopManager" && editShopId == null)
             {
                 error = "Please select a shop for this user.";
                 return;
@@ -317,7 +332,7 @@
                 UserName = editEmail,
                 Email = editEmail,
                 FullName = editFullName,
-                TeacherId = editRole == "Shop" ? editShopId : null,
+                BookshopId = editRole == "BookshopManager" ? editShopId : null,
                 EmailConfirmed = true
             };
 
@@ -329,6 +344,16 @@
             }
 
             await UserManager.AddToRoleAsync(user, editRole);
+
+            if (editRole == "Teacher")
+            {
+                var teacher = new Teacher { Name = editFullName };
+                Db.Teachers.Add(teacher);
+                await Db.SaveChangesAsync();
+                user.TeacherId = teacher.Id;
+                await UserManager.UpdateAsync(user);
+            }
+
             message = $"User '{editEmail}' created with role '{editRole}'.";
         }
 

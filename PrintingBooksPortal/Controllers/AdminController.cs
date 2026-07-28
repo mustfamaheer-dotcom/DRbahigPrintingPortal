@@ -89,6 +89,22 @@ public class AdminController : ControllerBase
         return Ok(teachers);
     }
 
+    [HttpPost("refresh-claims")]
+    public async Task<IActionResult> RefreshTeacherClaims()
+    {
+        var teachers = await _userManager.GetUsersInRoleAsync("Teacher");
+        var count = 0;
+        foreach (var user in teachers)
+        {
+            if (user.TeacherId != null)
+            {
+                await _userManager.UpdateSecurityStampAsync(user);
+                count++;
+            }
+        }
+        return Ok(new { success = true, message = $"Claims refresh triggered for {count} teacher(s). They must log out and log back in." });
+    }
+
     [HttpPost("reset-shop-stats/{teacherId:int}")]
     public async Task<IActionResult> ResetTeacherStats(int teacherId, [FromBody] ResetRequest request)
     {

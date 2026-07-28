@@ -1,5 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.EntityFrameworkCore;
+using PrintingBooksPortal.Data;
 
 namespace PrintingBooksPortal.Services;
 
@@ -15,15 +17,17 @@ public class TenantContext : ITenantContext
 {
     private readonly AuthenticationStateProvider _authState;
     private readonly ILogger<TenantContext> _logger;
+    private readonly IServiceScopeFactory _scopeFactory;
     private bool _initialized;
     private int? _teacherId;
     private bool _isAdmin;
     private string? _userId;
 
-    public TenantContext(AuthenticationStateProvider authState, ILogger<TenantContext> logger)
+    public TenantContext(AuthenticationStateProvider authState, ILogger<TenantContext> logger, IServiceScopeFactory scopeFactory)
     {
         _authState = authState;
         _logger = logger;
+        _scopeFactory = scopeFactory;
     }
 
     public int? TeacherId
@@ -60,9 +64,15 @@ public class TenantContext : ITenantContext
         {
             var state = await _authState.GetAuthenticationStateAsync();
             if (state.User.Identity?.IsAuthenticated == true)
+            {
                 InitializeFromPrincipal(state.User);
+                if (_teacherId == null)
+                    await TryResolveTeacherIdFromDb(state.User);
+            }
             else
+            {
                 _logger.LogWarning("InitializeAsync: user is not authenticated");
+            }
         }
         catch (Exception ex)
         {
@@ -81,6 +91,31 @@ public class TenantContext : ITenantContext
         _userId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         if (_teacherId == null)
             _logger.LogWarning("InitializeFromPrincipal: TeacherId claim not found or not parseable for user {UserId}", _userId);
+    }
+
+    private async Task TryResolveTeacherIdFromDb(ClaimsPrincipal user)
+    {
+        try
+        {
+            var userId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userId)) return;
+
+            using var scope = _scopeFactory.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var appUser = await db.Users
+                .AsNoTracking()
+                .FirstOrDefaultAsync(u => u.Id == userId);
+
+            if (appUser?.TeacherId != null)
+            {
+                _teacherId = appUser.TeacherId.Value;
+                _logger.LogInformation("Fallback: resolved TeacherId {TeacherId} from DB for user {UserId}", _teacherId, userId);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Fallback DB lookup for TeacherId failed for user {UserId}", _userId);
+        }
     }
 
     private void Initialize()
