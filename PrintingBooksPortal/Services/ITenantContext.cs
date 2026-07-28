@@ -14,14 +14,16 @@ public interface ITenantContext
 public class TenantContext : ITenantContext
 {
     private readonly AuthenticationStateProvider _authState;
+    private readonly ILogger<TenantContext> _logger;
     private bool _initialized;
     private int? _teacherId;
     private bool _isAdmin;
     private string? _userId;
 
-    public TenantContext(AuthenticationStateProvider authState)
+    public TenantContext(AuthenticationStateProvider authState, ILogger<TenantContext> logger)
     {
         _authState = authState;
+        _logger = logger;
     }
 
     public int? TeacherId
@@ -59,9 +61,12 @@ public class TenantContext : ITenantContext
             var state = await _authState.GetAuthenticationStateAsync();
             if (state.User.Identity?.IsAuthenticated == true)
                 InitializeFromPrincipal(state.User);
+            else
+                _logger.LogWarning("InitializeAsync: user is not authenticated");
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogError(ex, "InitializeAsync failed to resolve authentication state");
         }
         _initialized = true;
     }
@@ -74,6 +79,8 @@ public class TenantContext : ITenantContext
             _teacherId = tid;
         _isAdmin = user.IsInRole("Admin");
         _userId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (_teacherId == null)
+            _logger.LogWarning("InitializeFromPrincipal: TeacherId claim not found or not parseable for user {UserId}", _userId);
     }
 
     private void Initialize()
@@ -88,10 +95,13 @@ public class TenantContext : ITenantContext
                 var user = task.Result.User;
                 if (user.Identity?.IsAuthenticated == true)
                     InitializeFromPrincipal(user);
+                else
+                    _logger.LogWarning("Initialize (sync fallback): user is not authenticated");
             }
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogError(ex, "Initialize (sync fallback) failed to resolve authentication state");
         }
     }
 }

@@ -1,21 +1,15 @@
-using System.Security.Claims;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using PrintingBooksPortal.Models;
-using PrintingBooksPortal.Services;
 
 namespace PrintingBooksPortal.Data;
 
 public class AppDbContext : IdentityDbContext<ApplicationUser>
 {
-    private readonly IHttpContextAccessor? _httpContextAccessor;
-
-    public AppDbContext(DbContextOptions<AppDbContext> options, IHttpContextAccessor? httpContextAccessor = null)
+    public AppDbContext(DbContextOptions<AppDbContext> options)
         : base(options)
     {
-        _httpContextAccessor = httpContextAccessor;
     }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
@@ -31,18 +25,6 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<PrintLog> PrintLogs => Set<PrintLog>();
     public DbSet<Invoice> Invoices => Set<Invoice>();
     public DbSet<SystemSetting> SystemSettings => Set<SystemSetting>();
-
-    private int? GetCurrentTeacherId()
-    {
-        if (_httpContextAccessor?.HttpContext == null)
-            return null;
-
-        var teacherIdClaim = _httpContextAccessor.HttpContext.User.FindFirst("TeacherId");
-        if (teacherIdClaim != null && int.TryParse(teacherIdClaim.Value, out var teacherId))
-            return teacherId;
-
-        return null;
-    }
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -94,9 +76,6 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
                 .WithMany(t => t.Boards)
                 .HasForeignKey(b => b.TeacherId)
                 .OnDelete(DeleteBehavior.Restrict);
-
-            builder.Entity<EducationalBoard>()
-                .HasQueryFilter(b => b.TeacherId == GetCurrentTeacherId() || GetCurrentTeacherId() == null);
         });
 
         builder.Entity<Book>(e =>
@@ -110,9 +89,6 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
                 .WithMany(bd => bd.Books)
                 .HasForeignKey(b => b.BoardId)
                 .OnDelete(DeleteBehavior.Restrict);
-
-            builder.Entity<Book>()
-                .HasQueryFilter(b => b.TeacherId == GetCurrentTeacherId() || GetCurrentTeacherId() == null);
         });
 
         builder.Entity<PrintLog>(e =>
