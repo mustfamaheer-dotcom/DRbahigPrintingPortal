@@ -473,6 +473,9 @@ public class InstallerForm : Form
             await SetProgress(5, "Extracting files...");
             ExtractResource("BookShopPrintAgent.exe", tmpDir);
             ExtractResource("BookShopAgentUI.exe", tmpDir);
+            ExtractResource("BookShopAgentUI.dll", tmpDir);
+            ExtractResource("BookShopAgentUI.deps.json", tmpDir);
+            ExtractResource("BookShopAgentUI.runtimeconfig.json", tmpDir);
             ExtractResource("SumatraPDF-3.6.1-64.exe", tmpDir);
             ExtractResource("appsettings.json", tmpDir);
             ExtractResource("book.ico", tmpDir);
@@ -491,12 +494,17 @@ public class InstallerForm : Form
             foreach (var f in Directory.GetFiles(installDir, "*.pdb")) SafeDelete(f);
             SafeDelete(Path.Combine(installDir, "BookShopPrintAgent.deps.json"));
             SafeDelete(Path.Combine(installDir, "BookShopPrintAgent.runtimeconfig.json"));
+            SafeDelete(Path.Combine(installDir, "BookShopAgentUI.deps.json"));
+            SafeDelete(Path.Combine(installDir, "BookShopAgentUI.runtimeconfig.json"));
 
             await SetProgress(40, "Copying print agent...");
             File.Copy(Path.Combine(tmpDir, "BookShopPrintAgent.exe"), Path.Combine(installDir, "BookShopPrintAgent.exe"), true);
 
             await SetProgress(52, "Copying dashboard...");
             File.Copy(Path.Combine(tmpDir, "BookShopAgentUI.exe"), Path.Combine(installDir, "BookShopAgentUI.exe"), true);
+            File.Copy(Path.Combine(tmpDir, "BookShopAgentUI.dll"), Path.Combine(installDir, "BookShopAgentUI.dll"), true);
+            File.Copy(Path.Combine(tmpDir, "BookShopAgentUI.deps.json"), Path.Combine(installDir, "BookShopAgentUI.deps.json"), true);
+            File.Copy(Path.Combine(tmpDir, "BookShopAgentUI.runtimeconfig.json"), Path.Combine(installDir, "BookShopAgentUI.runtimeconfig.json"), true);
 
             await SetProgress(62, "Copying printer engine...");
             File.Copy(Path.Combine(tmpDir, "SumatraPDF-3.6.1-64.exe"), Path.Combine(installDir, "SumatraPDF-3.6.1-64.exe"), true);

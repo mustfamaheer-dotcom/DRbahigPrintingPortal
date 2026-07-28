@@ -13,6 +13,9 @@
   <ItemGroup>
     <EmbeddedResource Include="..\BookShopPrintAgent\publish\BookShopPrintAgent.exe" LogicalName="BookShopPrintAgent.exe" />
     <EmbeddedResource Include="..\BookShopPrintAgent\publish\BookShopAgentUI.exe" LogicalName="BookShopAgentUI.exe" />
+    <EmbeddedResource Include="..\BookShopPrintAgent\publish\BookShopAgentUI.dll" LogicalName="BookShopAgentUI.dll" />
+    <EmbeddedResource Include="..\BookShopPrintAgent\publish\BookShopAgentUI.deps.json" LogicalName="BookShopAgentUI.deps.json" />
+    <EmbeddedResource Include="..\BookShopPrintAgent\publish\BookShopAgentUI.runtimeconfig.json" LogicalName="BookShopAgentUI.runtimeconfig.json" />
     <EmbeddedResource Include="..\BookShopPrintAgent\publish\SumatraPDF-3.6.1-64.exe" LogicalName="SumatraPDF-3.6.1-64.exe" />
     <EmbeddedResource Include="..\BookShopPrintAgent\publish\appsettings.json" LogicalName="appsettings.json" />
     <EmbeddedResource Include="..\BookShopPrintAgent\book.ico" LogicalName="book.ico" />
