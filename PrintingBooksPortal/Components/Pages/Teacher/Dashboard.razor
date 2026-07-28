@@ -1,142 +1,193 @@
 @page "/teacher/dashboard"
 @attribute [Authorize(Roles = "Teacher")]
-@inject HttpClient Http
-@inject ISnackbar Snackbar
+@rendermode InteractiveServer
+@inject AppDbContext Db
+@inject ITenantContext Tenant
 @inject NavigationManager Navigation
 
-<MudContainer MaxWidth="MaxWidth.Large" Class="py-8">
-    <MudText Typo="Typo.h4" Class="mb-1">Teacher Dashboard</MudText>
-    <MudText Typo="Typo.body2" Class="mb-6">Overview of your books, bookshops, and printing activity</MudText>
+<div class="content-area dashboard-page">
+    <div class="page-header">
+        <div>
+            <h1>Teacher Dashboard</h1>
+            <p class="page-subtitle">Overview of your books, bookshops, and printing activity</p>
+        </div>
+    </div>
 
     @if (loading)
     {
-        <div class="d-flex justify-center ma-8">
-            <MudProgressCircular Indeterminate="true" Size="Size.Large" />
-        </div>
+        <div class="loading-placeholder">Loading...</div>
     }
     else
     {
-        <MudGrid>
-            <MudItem xs="12" sm="6" md="3">
-                <MudPaper Class="pa-4" Elevation="1">
-                    <MudText Typo="Typo.body2" Class="text-secondary">Total Books</MudText>
-                    <MudText Typo="Typo.h4" Class="mt-2">@stats.TotalBooks</MudText>
-                    <MudIcon Icon="@Icons.Material.Filled.Book" Size="Size.Small" Class="mt-2 text-secondary" />
-                </MudPaper>
-            </MudItem>
-            <MudItem xs="12" sm="6" md="3">
-                <MudPaper Class="pa-4" Elevation="1">
-                    <MudText Typo="Typo.body2" Class="text-secondary">Active Bookshops</MudText>
-                    <MudText Typo="Typo.h4" Class="mt-2">@stats.ActiveBookshops</MudText>
-                    <MudIcon Icon="@Icons.Material.Filled.Store" Size="Size.Small" Class="mt-2 text-secondary" />
-                </MudPaper>
-            </MudItem>
-            <MudItem xs="12" sm="6" md="3">
-                <MudPaper Class="pa-4" Elevation="1">
-                    <MudText Typo="Typo.body2" Class="text-secondary">Copies This Month</MudText>
-                    <MudText Typo="Typo.h4" Class="mt-2">@stats.CopiesThisMonth</MudText>
-                    <MudIcon Icon="@Icons.Material.Filled.Print" Size="Size.Small" Class="mt-2 text-secondary" />
-                </MudPaper>
-            </MudItem>
-            <MudItem xs="12" sm="6" md="3">
-                <MudPaper Class="pa-4" Elevation="1">
-                    <MudText Typo="Typo.body2" Class="text-secondary">Total All Time</MudText>
-                    <MudText Typo="Typo.h4" Class="mt-2">@stats.TotalCopiesAllTime</MudText>
-                    <MudIcon Icon="@Icons.Material.Filled.TrendingUp" Size="Size.Small" Class="mt-2 text-secondary" />
-                </MudPaper>
-            </MudItem>
-        </MudGrid>
-
-        <MudGrid Class="mt-4">
-            <MudItem xs="12" md="6">
-                <MudPaper Class="pa-4" Elevation="1">
-                    <MudText Typo="Typo.h6" Class="mb-4">Quick Actions</MudText>
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Class="mb-2"
-                               StartIcon="@Icons.Material.Filled.AddLink"
-                               OnClick="GoToBookshops">
-                        Manage Bookshops
-                    </MudButton>
-                    <MudButton Variant="Variant.Outlined" Color="Color.Secondary" FullWidth="true" Class="mb-2"
-                               StartIcon="@Icons.Material.Filled.Receipt"
-                               OnClick="GoToInvoices">
-                        View Invoices
-                    </MudButton>
-                    <MudButton Variant="Variant.Text" Color="Color.Info" FullWidth="true"
-                               StartIcon="@Icons.Material.Filled.Book"
-                               OnClick="GoToMyBooks">
-                        My Books
-                    </MudButton>
-                </MudPaper>
-            </MudItem>
-            <MudItem xs="12" md="6">
-                <MudPaper Class="pa-4" Elevation="1">
-                    <MudText Typo="Typo.h6" Class="mb-4">Recent Activity</MudText>
-                    @if (stats.RecentLogs.Any())
-                    {
-                        <div class="mud-list mud-list-dense">
-                            @foreach (var log in stats.RecentLogs)
-                            {
-                                <div class="mud-list-item mud-list-item-dense">
-                                    <MudText Typo="Typo.body2">Printed "@log.BookTitle" (@log.Copies copies)</MudText>
-                                    <MudText Typo="Typo.caption" Class="text-secondary">@log.ShopName - @log.PrintedAt.ToString("g")</MudText>
-                                </div>
-                            }
+        <div class="row g-4 mb-4">
+            <div class="col-md-3 col-6">
+                <div class="stat-card stat-card-primary">
+                    <div class="stat-card-bg"></div>
+                    <div class="stat-card-inner">
+                        <div class="stat-icon">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
                         </div>
-                    }
-                    else
-                    {
-                        <MudText Typo="Typo.body2" Class="text-secondary">No recent printing activity</MudText>
-                    }
-                </MudPaper>
-            </MudItem>
-        </MudGrid>
+                        <div class="stat-info">
+                            <div class="stat-label">Total Books</div>
+                            <div class="stat-value">@totalBooks</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 col-6">
+                <div class="stat-card stat-card-success">
+                    <div class="stat-card-bg"></div>
+                    <div class="stat-card-inner">
+                        <div class="stat-icon">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                        </div>
+                        <div class="stat-info">
+                            <div class="stat-label">Active Bookshops</div>
+                            <div class="stat-value">@activeBookshops</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 col-6">
+                <div class="stat-card stat-card-purple">
+                    <div class="stat-card-bg"></div>
+                    <div class="stat-card-inner">
+                        <div class="stat-icon">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                        </div>
+                        <div class="stat-info">
+                            <div class="stat-label">Boards</div>
+                            <div class="stat-value">@totalBoards</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 col-6">
+                <div class="stat-card stat-card-warning">
+                    <div class="stat-card-bg"></div>
+                    <div class="stat-card-inner">
+                        <div class="stat-icon">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+                        </div>
+                        <div class="stat-info">
+                            <div class="stat-label">Copies This Month</div>
+                            <div class="stat-value">@copiesThisMonth</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-4">
+            <div class="col-lg-8">
+                <div class="content-card">
+                    <div class="card-header d-flex align-items-center justify-content-between">
+                        <h5>Recent Activity</h5>
+                        <a href="/teacher/history" class="btn btn-sm btn-header-link">View All</a>
+                    </div>
+                    <div class="card-body p-0">
+                        @if (recentLogs == null)
+                        {
+                            <div class="loading-placeholder">Loading...</div>
+                        }
+                        else if (!recentLogs.Any())
+                        {
+                            <div class="empty-state">
+                                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--gray-300)" stroke-width="1.5"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>
+                                <p>No recent printing activity</p>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="activity-timeline">
+                                @foreach (var log in recentLogs)
+                                {
+                                    <div class="timeline-item">
+                                        <div class="timeline-dot"></div>
+                                        <div class="timeline-content">
+                                            <div class="timeline-header">
+                                                <span class="timeline-shop">@log.ShopName</span>
+                                                <span class="timeline-time">@log.PrintedAt.ToLocalTime().ToString("g")</span>
+                                            </div>
+                                            <div class="timeline-body">
+                                                <span class="timeline-book">@log.BookTitle</span>
+                                                <span class="timeline-badge"><strong>@log.Copies</strong> cop@(log.Copies == 1 ? "y" : "ies")</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-4">
+                <div class="content-card">
+                    <div class="card-header"><h5>Quick Actions</h5></div>
+                    <div class="card-body">
+                        <div class="quick-actions">
+                            <a href="/teacher/boards" class="quick-action-item">
+                                <div class="quick-action-icon" style="background: #ede9fe; color: #7c3aed;">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+                                </div>
+                                <div>
+                                    <div class="quick-action-label">My Boards</div>
+                                    <div class="quick-action-desc">Manage educational boards</div>
+                                </div>
+                            </a>
+                            <a href="/teacher/mybooks" class="quick-action-item">
+                                <div class="quick-action-icon" style="background: var(--primary-light); color: var(--primary);">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+                                </div>
+                                <div>
+                                    <div class="quick-action-label">Upload New Book</div>
+                                    <div class="quick-action-desc">Add a book to a board</div>
+                                </div>
+                            </a>
+                            <a href="/teacher/bookshops" class="quick-action-item">
+                                <div class="quick-action-icon" style="background: #ecfdf5; color: var(--success);">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                                </div>
+                                <div>
+                                    <div class="quick-action-label">Manage Bookshops</div>
+                                    <div class="quick-action-desc">Link shops and manage API keys</div>
+                                </div>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     }
-</MudContainer>
+</div>
 
 @code {
-    private DashboardStats stats = new();
+    private int totalBooks;
+    private int activeBookshops;
+    private int totalBoards;
+    private int copiesThisMonth;
+    private List<PrintLog>? recentLogs;
     private bool loading = true;
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
-            stats = await Http.GetFromJsonAsync<DashboardStats>("/api/teacher/dashboard") ?? new DashboardStats();
-        }
-        catch
-        {
-            stats = new DashboardStats
-            {
-                TotalBooks = 0,
-                ActiveBookshops = 0,
-                CopiesThisMonth = 0,
-                TotalCopiesAllTime = 0
-            };
+            await Tenant.InitializeAsync();
+            if (Tenant.TeacherId == null) return;
+            var tid = Tenant.TeacherId.Value;
+            var now = DateTime.UtcNow;
+            var monthStart = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+
+            totalBooks = await Db.Books.CountAsync(b => b.TeacherId == tid && b.IsActive);
+            activeBookshops = await Db.TeacherBookshopLinks.CountAsync(l => l.TeacherId == tid && l.IsActive);
+            totalBoards = await Db.EducationalBoards.CountAsync(b => b.TeacherId == tid && b.IsActive);
+            copiesThisMonth = await Db.PrintLogs.Where(l => l.TeacherId == tid && l.PrintedAt >= monthStart).SumAsync(l => (int?)l.Copies) ?? 0;
+            recentLogs = await Db.PrintLogs.Where(l => l.TeacherId == tid).OrderByDescending(l => l.PrintedAt).Take(5).ToListAsync();
         }
         finally
         {
             loading = false;
         }
-    }
-
-    private void GoToBookshops() => Navigation.NavigateTo("/teacher/bookshops");
-    private void GoToInvoices() => Navigation.NavigateTo("/teacher/invoices");
-    private void GoToMyBooks() => Navigation.NavigateTo("/teacher/mybooks");
-
-    private class DashboardStats
-    {
-        public int TotalBooks { get; set; }
-        public int ActiveBookshops { get; set; }
-        public int CopiesThisMonth { get; set; }
-        public int TotalCopiesAllTime { get; set; }
-        public List<LogEntry> RecentLogs { get; set; } = new();
-    }
-
-    private class LogEntry
-    {
-        public string BookTitle { get; set; } = "";
-        public string ShopName { get; set; } = "";
-        public int Copies { get; set; }
-        public DateTime PrintedAt { get; set; }
     }
 }

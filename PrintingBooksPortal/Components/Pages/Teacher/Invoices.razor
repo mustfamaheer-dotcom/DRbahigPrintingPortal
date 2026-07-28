@@ -1,98 +1,100 @@
 @page "/teacher/invoices"
 @attribute [Authorize(Roles = "Teacher")]
-@inject HttpClient Http
-@inject ISnackbar Snackbar
+@rendermode InteractiveServer
+@inject AppDbContext Db
+@inject ITenantContext Tenant
 
-<MudContainer MaxWidth="MaxWidth.Large" Class="py-8">
-    <MudText Typo="Typo.h4" Class="mb-1">Billing & Invoices</MudText>
-    <MudText Typo="Typo.body2" Class="mb-6">View invoices generated for your bookshops</MudText>
-
-    @if (loading)
-    {
-        <div class="d-flex justify-center ma-8">
-            <MudProgressCircular Indeterminate="true" Size="Size.Large" />
+<div class="content-area">
+    <div class="page-header">
+        <div>
+            <h1>Billing & Invoices</h1>
+            <p class="page-subtitle">View invoices generated for your bookshops</p>
         </div>
-    }
-    else if (invoices != null && invoices.Any())
-    {
-        <MudTable Items="invoices" Dense="false" Hover="true" Striped="true" Elevation="1" Class="rounded-lg">
-            <HeaderContent>
-                <MudTh>Bookshop</MudTh>
-                <MudTh>Period</MudTh>
-                <MudTh>Total Copies</MudTh>
-                <MudTh>Total Amount</MudTh>
-                <MudTh>Status</MudTh>
-                <MudTh>Date</MudTh>
-            </HeaderContent>
-            <RowTemplate>
-                <MudTd DataLabel="Bookshop">
-                    <MudText Typo="Typo.body2" Class="font-weight-medium">@context.BookshopName</MudText>
-                </MudTd>
-                <MudTd DataLabel="Period">
-                    <MudText Typo="Typo.caption">@context.PeriodStart.ToString("dd/MM/yyyy") - @context.PeriodEnd.ToString("dd/MM/yyyy")</MudText>
-                </MudTd>
-                <MudTd DataLabel="Copies">
-                    <span class="mud-chip mud-chip-filled mud-chip-color-primary mud-chip-size-small">@context.TotalCopies</span>
-                </MudTd>
-                <MudTd DataLabel="Amount">
-                    <MudText Typo="Typo.body2" Class="font-weight-medium">@context.TotalAmount.ToString("N2") @context.Currency</MudText>
-                </MudTd>
-                <MudTd DataLabel="Status">
-                    <span class="mud-chip mud-chip-filled @(context.Status == "Paid" ? "mud-chip-color-success" : "mud-chip-color-warning") mud-chip-size-small">@context.Status</span>
-                </MudTd>
-                <MudTd DataLabel="Created">
-                    <MudText Typo="Typo.caption">@context.CreatedAt.ToString("g")</MudText>
-                </MudTd>
-            </RowTemplate>
-        </MudTable>
+    </div>
 
-        <MudText Typo="Typo.body2" Class="mt-4 text-secondary">
-            Showing page @currentPage of @totalPages (@total invoices)
-        </MudText>
-    }
-    else
-    {
-        <MudPaper Class="pa-8 text-center" Elevation="0">
-            <MudIcon Icon="@Icons.Material.Filled.Receipt" Size="Size.Large" Class="mb-4 text-secondary" />
-            <MudText Typo="Typo.h6" Class="text-secondary">No Invoices Yet</MudText>
-            <MudText Typo="Typo.body2" Class="text-secondary">Invoices are generated when you reset bookshop statistics</MudText>
-        </MudPaper>
-    }
-</MudContainer>
+    <div class="content-card">
+        <div class="card-header d-flex align-items-center justify-content-between">
+            <h5>Invoices <span class="text-muted fs-6 fw-normal">(@total invoices)</span></h5>
+        </div>
+        <div class="card-body p-0">
+            @if (invoices == null)
+            {
+                <div class="loading-placeholder">Loading...</div>
+            }
+            else if (!invoices.Any())
+            {
+                <div class="empty-state">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--gray-300)" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    <p>No invoices yet. Invoices are generated when you reset bookshop statistics.</p>
+                </div>
+            }
+            else
+            {
+                <div class="table-container">
+                    <table class="table table-modern">
+                        <thead>
+                            <tr>
+                                <th>Bookshop</th>
+                                <th>Period</th>
+                                <th>Copies</th>
+                                <th>Amount</th>
+                                <th>Status</th>
+                                <th>Date</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var inv in invoices)
+                            {
+                                <tr>
+                                    <td><strong>@inv.BookshopName</strong></td>
+                                    <td><small class="text-muted">@inv.PeriodStart.ToString("dd/MM/yyyy") - @inv.PeriodEnd.ToString("dd/MM/yyyy")</small></td>
+                                    <td><span class="status-badge status-active">@inv.TotalCopies</span></td>
+                                    <td><strong>@inv.TotalAmount.ToString("N2") @inv.Currency</strong></td>
+                                    <td>
+                                        <span class="status-badge @(inv.Status == "Paid" ? "status-active" : "status-warning")">
+                                            <span class="status-dot"></span>
+                                            @inv.Status
+                                        </span>
+                                    </td>
+                                    <td><small class="text-muted">@inv.CreatedAt.ToString("g")</small></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+</div>
 
 @code {
     private List<InvoiceView>? invoices;
-    private bool loading = true;
-    private int currentPage = 1;
     private int total;
-    private int totalPages => Math.Max(1, (int)Math.Ceiling(total / 20.0));
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadInvoices();
-    }
-
-    private async Task LoadInvoices()
-    {
-        loading = true;
-        try
+        await Tenant.InitializeAsync();
+        if (Tenant.TeacherId == null) return;
+        var tid = Tenant.TeacherId.Value;
+        var query = Db.Invoices
+            .Where(i => i.Link.TeacherId == tid)
+            .Include(i => i.Link).ThenInclude(l => l.Bookshop)
+            .OrderByDescending(i => i.CreatedAt);
+        total = await query.CountAsync();
+        invoices = await query.Select(i => new InvoiceView
         {
-            var result = await Http.GetFromJsonAsync<InvoiceResponse>($"/api/teacher/invoices?page={currentPage}&pageSize=20");
-            if (result != null)
-            {
-                invoices = result.items;
-                total = result.total;
-            }
-        }
-        catch (Exception ex)
-        {
-            Snackbar.Add($"Failed to load invoices: {ex.Message}", Severity.Error);
-            invoices = new List<InvoiceView>();
-        }
-        finally
-        {
-            loading = false;
-        }
+            Id = i.Id,
+            TeacherBookshopLinkId = i.TeacherBookshopLinkId,
+            BookshopName = i.Link.Bookshop.Name,
+            PeriodStart = i.PeriodStart,
+            PeriodEnd = i.PeriodEnd,
+            TotalCopies = i.TotalCopies,
+            Currency = i.Currency,
+            TotalAmount = i.TotalAmount,
+            Status = i.Status.ToString(),
+            CreatedAt = i.CreatedAt,
+            PaidAt = i.PaidAt
+        }).ToListAsync();
     }
 
     private class InvoiceView
@@ -108,13 +110,5 @@
         public string Status { get; set; } = "Pending";
         public DateTime CreatedAt { get; set; }
         public DateTime? PaidAt { get; set; }
-    }
-
-    private class InvoiceResponse
-    {
-        public List<InvoiceView> items { get; set; } = new();
-        public int total { get; set; }
-        public int page { get; set; }
-        public int pageSize { get; set; }
     }
 }

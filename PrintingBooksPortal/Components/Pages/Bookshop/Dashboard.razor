@@ -1,0 +1,151 @@
+@page "/bookshop/dashboard"
+@attribute [Authorize(Roles = "BookshopManager")]
+@rendermode InteractiveServer
+@inject AppDbContext Db
+@inject AuthenticationStateProvider AuthState
+@inject UserManager<ApplicationUser> UserManager
+@inject NavigationManager Navigation
+
+<div class="content-area">
+    <div class="page-header">
+        <div>
+            <h1>Bookshop Portal</h1>
+            <p class="page-subtitle">View and print books assigned to your bookshop</p>
+        </div>
+        <div class="page-header-actions">
+            <span class="text-muted fs-6">Total: <strong>@totalBooks</strong> books</span>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(message))
+    {
+        <div class="alert alert-modern alert-success">@message</div>
+    }
+    @if (!string.IsNullOrEmpty(error))
+    {
+        <div class="alert alert-modern alert-danger">@error</div>
+    }
+
+    @if (books == null)
+    {
+        <div class="loading-placeholder">Loading...</div>
+    }
+    else if (!books.Any())
+    {
+        <div class="content-card">
+            <div class="card-body">
+                <div class="empty-state">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--gray-300)" stroke-width="1.5"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+                    <p>No books assigned to your bookshop yet.</p>
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="content-card">
+            <div class="card-body p-0">
+                <div class="table-container">
+                    <table class="table table-modern">
+                        <thead>
+                            <tr>
+                                <th>Title</th>
+                                <th>Teacher</th>
+                                <th>Board</th>
+                                <th>Pages</th>
+                                <th class="text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var book in books)
+                            {
+                                <tr>
+                                    <td><strong>@book.Title</strong></td>
+                                    <td>@book.TeacherName</td>
+                                    <td>@book.BoardName</td>
+                                    <td>@book.PageCount</td>
+                                    <td class="text-end">
+                                        <div class="action-btns">
+                                            <button class="btn btn-sm btn-outline-primary" @onclick="() => ViewBook(book.Id)">
+                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                                                View
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private List<BookView>? books;
+    private int totalBooks;
+    private int? bookshopId;
+    private string? message;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadBooks();
+    }
+
+    private async Task LoadBooks()
+    {
+        var authState = await AuthState.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user.Identity?.IsAuthenticated != true) return;
+
+        var appUser = await UserManager.GetUserAsync(authState.User);
+        if (appUser == null || appUser.BookshopId == null) return;
+
+        bookshopId = appUser.BookshopId.Value;
+        var bid = bookshopId.Value;
+
+        var linkIds = await Db.TeacherBookshopLinks
+            .Where(l => l.BookshopId == bid && l.IsActive)
+            .Select(l => new { l.TeacherId, l.Id })
+            .ToListAsync();
+
+        var teacherIds = linkIds.Select(l => l.TeacherId).Distinct().ToList();
+        var linkMap = linkIds.ToDictionary(l => l.TeacherId, l => l.Id);
+
+        var rawBooks = await Db.Books
+            .Where(b => teacherIds.Contains(b.TeacherId!.Value) && b.IsActive)
+            .Include(b => b.Teacher)
+            .Include(b => b.Board)
+            .OrderByDescending(b => b.CreatedAt)
+            .ToListAsync();
+
+        totalBooks = rawBooks.Count;
+
+        books = rawBooks.Select(b => new BookView
+        {
+            Id = b.Id,
+            Title = b.Title,
+            TeacherName = b.Teacher?.Name ?? "Unknown",
+            TeacherId = b.TeacherId ?? 0,
+            BoardName = b.Board.Name,
+            PageCount = b.PageCount
+        }).ToList();
+    }
+
+    private void ViewBook(int bookId)
+    {
+        Navigation.NavigateTo($"/bookshop/viewer/{bookId}");
+    }
+
+    private class BookView
+    {
+        public int Id { get; set; }
+        public string Title { get; set; } = "";
+        public string TeacherName { get; set; } = "";
+        public int TeacherId { get; set; }
+        public string BoardName { get; set; } = "";
+        public int PageCount { get; set; }
+    }
+}

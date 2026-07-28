@@ -102,7 +102,8 @@
         var path = new Uri(Navigation.Uri).AbsolutePath;
         showSidebar = !path.StartsWith("/login", StringComparison.OrdinalIgnoreCase)
                    && !path.StartsWith("/access-denied", StringComparison.OrdinalIgnoreCase)
-                   && !path.StartsWith("/shop/viewer", StringComparison.OrdinalIgnoreCase);
+                   && !path.StartsWith("/shop/viewer", StringComparison.OrdinalIgnoreCase)
+                   && !path.StartsWith("/bookshop/viewer", StringComparison.OrdinalIgnoreCase);
         showTopBar = showSidebar;
     }
 

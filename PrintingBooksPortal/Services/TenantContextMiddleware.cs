@@ -13,18 +13,10 @@ public class TenantContextMiddleware
 
     public async Task InvokeAsync(HttpContext context, ITenantContext tenantContext)
     {
-        var ctx = (TenantContext)tenantContext;
-
-        if (context.User.Identity?.IsAuthenticated == true)
+        if (context.User.Identity?.IsAuthenticated == true && tenantContext is TenantContext ctx)
         {
-            var teacherIdClaim = context.User.FindFirst("TeacherId");
-            if (teacherIdClaim != null && int.TryParse(teacherIdClaim.Value, out var teacherId))
-                ctx.TeacherId = teacherId;
-
-            ctx.IsAdmin = context.User.IsInRole("Admin");
-            ctx.UserId = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            ctx.InitializeFromPrincipal(context.User);
         }
-
         await _next(context);
     }
 }

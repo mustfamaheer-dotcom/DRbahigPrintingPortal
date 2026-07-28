@@ -21,5 +21,6 @@ public class Bookshop
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
+    public ApplicationUser? BookshopUser { get; set; }
     public ICollection<TeacherBookshopLink> TeacherLinks { get; set; } = new List<TeacherBookshopLink>();
 }

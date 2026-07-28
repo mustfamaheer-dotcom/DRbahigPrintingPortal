@@ -51,6 +51,7 @@ builder.Services.AddAuthorization(options =>
 });
 
 builder.Services.AddScoped<ITenantContext, TenantContext>();
+builder.Services.AddScoped<IUserClaimsPrincipalFactory<ApplicationUser>, AppUserClaimsFactory>();
 builder.Services.AddScoped<FileStorageService>();
 builder.Services.AddScoped<PrintLoggingService>();
 builder.Services.AddScoped<IWatermarkService, WatermarkService>();
@@ -117,6 +118,8 @@ try
                     ALTER TABLE [AspNetUsers] ADD [TeacherId] int NULL;
                 IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='AspNetUsers' AND COLUMN_NAME='FullName')
                     ALTER TABLE [AspNetUsers] ADD [FullName] nvarchar(max) NULL;
+                IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='AspNetUsers' AND COLUMN_NAME='BookshopId')
+                    ALTER TABLE [AspNetUsers] ADD [BookshopId] int NULL;
 
                 -- Bookshops table
                 IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME='Bookshops')
@@ -171,9 +174,11 @@ try
                         CONSTRAINT [PK_Invoices] PRIMARY KEY ([Id])
                     );
 
-                -- Books: add TeacherId column if missing
+                -- Books: add multi-tenant columns if missing
                 IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='Books' AND COLUMN_NAME='TeacherId')
                     ALTER TABLE [Books] ADD [TeacherId] int NULL;
+                IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='Books' AND COLUMN_NAME='EnableWatermark')
+                    ALTER TABLE [Books] ADD [EnableWatermark] bit NOT NULL DEFAULT 1;
 
                 -- EducationalBoards: add TeacherId column if missing
                 IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='EducationalBoards' AND COLUMN_NAME='TeacherId')

@@ -13,7 +13,9 @@ public class ApplicationUser : IdentityUser
 {
     public UserRole Role { get; set; } = UserRole.Teacher;
     public int? TeacherId { get; set; }
+    public int? BookshopId { get; set; }
     public string? FullName { get; set; }
 
     public Teacher? Teacher { get; set; }
+    public Bookshop? Bookshop { get; set; }
 }

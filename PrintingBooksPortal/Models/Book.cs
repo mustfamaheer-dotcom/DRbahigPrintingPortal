@@ -25,6 +25,8 @@ public class Book
 
     public bool IsActive { get; set; } = true;
 
+    public bool EnableWatermark { get; set; } = true;
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public Teacher? Teacher { get; set; }

@@ -42,7 +42,7 @@ public class LoginController : ControllerBase
                     if (await _userManager.IsInRoleAsync(user, "Teacher"))
                         return Redirect("/teacher/dashboard");
                     if (await _userManager.IsInRoleAsync(user, "BookshopManager"))
-                        return Redirect("/");
+                        return Redirect("/bookshop/dashboard");
                 }
                 return Redirect("/");
             }

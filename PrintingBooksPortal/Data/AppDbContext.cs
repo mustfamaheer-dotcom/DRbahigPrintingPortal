@@ -59,6 +59,10 @@ public class AppDbContext : IdentityDbContext<ApplicationUser>
         builder.Entity<Bookshop>(e =>
         {
             e.HasIndex(b => b.Name);
+            e.HasOne(b => b.BookshopUser)
+                .WithOne(u => u.Bookshop)
+                .HasForeignKey<ApplicationUser>(u => u.BookshopId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         builder.Entity<TeacherBookshopLink>(e =>

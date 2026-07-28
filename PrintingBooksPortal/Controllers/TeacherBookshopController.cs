@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PrintingBooksPortal.Data;
@@ -15,12 +16,14 @@ public class TeacherBookshopController : ControllerBase
 {
     private readonly AppDbContext _db;
     private readonly ITenantContext _tenant;
+    private readonly UserManager<ApplicationUser> _userManager;
     private readonly ILogger<TeacherBookshopController> _logger;
 
-    public TeacherBookshopController(AppDbContext db, ITenantContext tenant, ILogger<TeacherBookshopController> logger)
+    public TeacherBookshopController(AppDbContext db, ITenantContext tenant, UserManager<ApplicationUser> userManager, ILogger<TeacherBookshopController> logger)
     {
         _db = db;
         _tenant = tenant;
+        _userManager = userManager;
         _logger = logger;
     }
 
@@ -167,10 +170,91 @@ public class TeacherBookshopController : ControllerBase
         return Ok(new { success = true, message = "Bookshop unlinked." });
     }
 
+    [HttpPost("{linkId}/create-user")]
+    public async Task<IActionResult> CreateBookshopUser(int linkId, [FromBody] CreateBookshopUserRequest request)
+    {
+        if (_tenant.TeacherId == null)
+            return Unauthorized(new { error = "Teacher identity not found." });
+
+        if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Password))
+            return BadRequest(new { error = "Email and password are required." });
+
+        var link = await _db.TeacherBookshopLinks
+            .Include(l => l.Bookshop)
+            .FirstOrDefaultAsync(l => l.Id == linkId && l.TeacherId == _tenant.TeacherId.Value);
+
+        if (link == null)
+            return NotFound(new { error = "Link not found." });
+
+        var existingUser = await _userManager.FindByEmailAsync(request.Email);
+        if (existingUser != null)
+            return Conflict(new { error = "A user with this email already exists." });
+
+        var user = new ApplicationUser
+        {
+            UserName = request.Email,
+            Email = request.Email,
+            FullName = link.Bookshop.Name,
+            Role = UserRole.BookshopManager,
+            BookshopId = link.BookshopId,
+            EmailConfirmed = true
+        };
+
+        var result = await _userManager.CreateAsync(user, request.Password);
+        if (!result.Succeeded)
+            return BadRequest(new { success = false, errors = result.Errors.Select(e => e.Description) });
+
+        await _userManager.AddToRoleAsync(user, "BookshopManager");
+
+        _logger.LogInformation("Teacher {TeacherId} created bookshop user '{Email}' for bookshop {BookshopId}",
+            _tenant.TeacherId, request.Email, link.BookshopId);
+
+        return Ok(new { success = true, message = $"User '{request.Email}' created for '{link.Bookshop.Name}'." });
+    }
+
+    [HttpPost("{linkId}/reset-password")]
+    public async Task<IActionResult> ResetBookshopUserPassword(int linkId, [FromBody] ResetPasswordRequest request)
+    {
+        if (_tenant.TeacherId == null)
+            return Unauthorized(new { error = "Teacher identity not found." });
+
+        if (string.IsNullOrWhiteSpace(request.NewPassword))
+            return BadRequest(new { error = "New password is required." });
+
+        var link = await _db.TeacherBookshopLinks
+            .Include(l => l.Bookshop)
+            .FirstOrDefaultAsync(l => l.Id == linkId && l.TeacherId == _tenant.TeacherId.Value);
+
+        if (link == null)
+            return NotFound(new { error = "Link not found." });
+
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.BookshopId == link.BookshopId);
+        if (user == null)
+            return NotFound(new { error = "No user account exists for this bookshop. Create one first." });
+
+        var token = await _userManager.GeneratePasswordResetTokenAsync(user);
+        var result = await _userManager.ResetPasswordAsync(user, token, request.NewPassword);
+        if (!result.Succeeded)
+            return BadRequest(new { success = false, errors = result.Errors.Select(e => e.Description) });
+
+        return Ok(new { success = true, message = $"Password reset for '{user.Email}'." });
+    }
+
     public static string GenerateSecureApiKey()
     {
         return Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
     }
+}
+
+public class CreateBookshopUserRequest
+{
+    public string Email { get; set; } = string.Empty;
+    public string Password { get; set; } = string.Empty;
+}
+
+public class ResetPasswordRequest
+{
+    public string NewPassword { get; set; } = string.Empty;
 }
 
 public class LinkBookshopRequest
