@@ -76,15 +76,17 @@ public class PdfPrintService
 
             // PDF is already pre-sized with correct scale/margins/orientation — use noscale
             var printSettingsParts = new List<string> { "noscale" };
-            if (settings.Orientation == "landscape")
-                printSettingsParts.Add("landscape");
+            if (settings.Duplex == "long")
+                printSettingsParts.Add("duplexvertical");
+            else if (settings.Duplex == "short")
+                printSettingsParts.Add("duplexhorizontal");
 
             var combinedPrintSettings = string.Join(",", printSettingsParts);
 
             for (int i = 0; i < settings.Copies; i++)
             {
-                _logger.LogInformation("Printing copy {Copy}/{Copies} for job {JobId}, printer={Printer}, orientation={Orient}, margins=({Ml},{Mr},{Mt},{Mb}), scale={Scale}%",
-                    i + 1, settings.Copies, jobId, settings.PrinterName, settings.Orientation,
+                _logger.LogInformation("Printing copy {Copy}/{Copies} for job {JobId}, printer={Printer}, duplex={Duplex}, margins=({Ml},{Mr},{Mt},{Mb}), scale={Scale}%",
+                    i + 1, settings.Copies, jobId, settings.PrinterName, settings.Duplex,
                     settings.MarginLeft, settings.MarginRight, settings.MarginTop, settings.MarginBottom,
                     settings.ScalingMode == "custom" ? settings.CustomScale?.ToString() ?? "100" : settings.ScalingMode);
 
@@ -123,8 +125,6 @@ public class PdfPrintService
     private byte[] ApplyPdfSettings(byte[] pdfBytes, PrintSettings settings)
     {
         var targetSize = GetPageSize(settings.PaperSize);
-        if (settings.Orientation == "landscape" && targetSize.GetWidth() < targetSize.GetHeight())
-            targetSize = new PageSize(targetSize.GetHeight(), targetSize.GetWidth());
 
         double mt = ToPoints(settings.MarginTop, settings.MarginUnit);
         double mb = ToPoints(settings.MarginBottom, settings.MarginUnit);
@@ -202,8 +202,8 @@ public class PdfPrintService
             "legal" => PageSize.LEGAL,
             "a3" => PageSize.A3,
             "a5" => PageSize.A5,
-            "b4" => PageSize.B4,
-            "b5" => PageSize.B5,
+            "jisb4" => new PageSize(728.5f, 1031.8f),
+            "jisb5" => new PageSize(516.1f, 728.5f),
             "executive" => PageSize.EXECUTIVE,
             "tabloid" or "ledger" => PageSize.TABLOID,
             _ => PageSize.A4

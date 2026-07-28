@@ -119,7 +119,7 @@ _ = Task.Run(async () =>
                             PrinterName = effectivePrinter,
                             Copies = copies,
                             ScalingMode = claimResult?.ScalingMode ?? "actual",
-                            Orientation = claimResult?.Orientation ?? "portrait",
+                            Duplex = claimResult?.Duplex ?? "off",
                             PaperSize = claimResult?.PaperSize ?? "A4",
                             MarginUnit = claimResult?.MarginUnit ?? "mm",
                             MarginTop = claimResult?.MarginTop ?? 0,
@@ -173,7 +173,7 @@ public class ClaimResponse
     public int Copies { get; set; } = 1;
     public string? PrinterName { get; set; }
     public string? PaperSize { get; set; }
-    public string? Orientation { get; set; }
+    public string? Duplex { get; set; }
     public string? ScalingMode { get; set; }
     public int? CustomScale { get; set; }
     public string? MarginUnit { get; set; }

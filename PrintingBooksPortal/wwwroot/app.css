@@ -1232,18 +1232,31 @@ a:hover { color: var(--primary-dark); }
 }
 
 /* ─── Margins ─── */
-.margin-options { display: flex; gap: 5px; }
+.margin-options-group {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+}
+.margin-options {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4px;
+    width: 100%;
+}
 .margin-btn {
-    flex: 1;
-    padding: 5px 0;
+    padding: 6px 2px;
     border: 1px solid rgba(255,255,255,0.12);
     border-radius: 6px;
     background: transparent;
     color: rgba(255,255,255,0.55);
-    font-size: 0.7rem;
+    font-size: 0.68rem;
     font-weight: 500;
     cursor: pointer;
+    text-align: center;
+    white-space: nowrap;
     transition: all 150ms ease;
+    min-width: 0;
 }
 .margin-btn:hover { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.8); }
 .margin-btn.active {

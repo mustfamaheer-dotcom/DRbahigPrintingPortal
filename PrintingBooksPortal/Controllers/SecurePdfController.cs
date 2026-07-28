@@ -197,14 +197,14 @@ public class SecurePdfController : ControllerBase
                 CreatedAt = DateTime.UtcNow,
                 PrinterName = request.PrinterName,
                 PaperSize = request.PaperSize ?? "A4",
-                Orientation = request.Orientation ?? "portrait",
+                Duplex = request.Duplex ?? "off",
                 ScalingMode = request.ScalingMode ?? "actual",
                 CustomScale = request.CustomScale ?? 100,
                 MarginUnit = request.MarginUnit ?? "mm",
                 MarginTop = request.MarginTop ?? 25.4,
                 MarginBottom = request.MarginBottom ?? 25.4,
-                MarginLeft = request.MarginLeft ?? 31.75,
-                MarginRight = request.MarginRight ?? 31.75
+                MarginLeft = request.MarginLeft ?? 25.4,
+                MarginRight = request.MarginRight ?? 25.4
             });
 
             var queueCount = PendingPrintJobs.Jobs.Count;
@@ -402,7 +402,7 @@ public class SecurePdfController : ControllerBase
                 copies = info.Copies,
                 printerName = info.PrinterName,
                 paperSize = info.PaperSize ?? "A4",
-                orientation = info.Orientation ?? "portrait",
+                duplex = info.Duplex ?? "off",
                 scalingMode = info.ScalingMode ?? "actual",
                 customScale = info.CustomScale ?? 100,
                 marginUnit = info.MarginUnit ?? "mm",
@@ -445,7 +445,7 @@ public class ProcessPrintRequest
 
     public string? PrinterName { get; set; }
     public string? PaperSize { get; set; }
-    public string? Orientation { get; set; }
+    public string? Duplex { get; set; }
     public string? ScalingMode { get; set; }
     public int? CustomScale { get; set; }
     public string? MarginUnit { get; set; }
@@ -462,7 +462,7 @@ public class PendingJobInfo
     public DateTime CreatedAt { get; set; }
     public string? PrinterName { get; set; }
     public string? PaperSize { get; set; }
-    public string? Orientation { get; set; }
+    public string? Duplex { get; set; }
     public string? ScalingMode { get; set; }
     public int? CustomScale { get; set; }
     public string? MarginUnit { get; set; }

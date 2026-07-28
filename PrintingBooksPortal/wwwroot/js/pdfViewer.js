@@ -30,15 +30,18 @@
     var settings = {
         printerName: '',
         paperSize: 'A4',
-        orientation: 'portrait',
+        duplex: 'off',
         scalingMode: 'actual',
         customScale: 100,
-        marginPreset: 'normal',
+        marginPreset: 'narrow',
         marginUnit: 'mm',
-        marginTop: 25.4,
-        marginBottom: 25.4,
-        marginLeft: 31.75,
-        marginRight: 31.75
+        marginTop: 12.7,
+        marginBottom: 12.7,
+        marginLeft: 12.7,
+        marginRight: 12.7,
+        customPaperWidth: null,
+        customPaperHeight: null,
+        customPaperUnit: 'in'
     };
 
     // Display settings
@@ -101,19 +104,11 @@
         // ─── Printer ───
         wirePrinterControls();
 
-        // ─── Page Setup ───
-        var paperSizeSelect = document.getElementById('paperSizeSelect');
-        var orientationSelect = document.getElementById('orientationSelect');
-        if (paperSizeSelect) {
-            paperSizeSelect.addEventListener('change', function () {
-                settings.paperSize = this.value;
-            });
-        }
-        if (orientationSelect) {
-            orientationSelect.addEventListener('change', function () {
-                settings.orientation = this.value;
-            });
-        }
+        // ─── Paper Size ───
+        wirePaperSizeControls();
+
+        // ─── Duplex ───
+        wireDuplexControls();
 
         // ─── Scaling ───
         wireScalingControls();
@@ -126,6 +121,58 @@
 
         // Initial printer detect
         detectPrinters();
+    }
+
+    // ══════════════════════════════════════
+    //  PAPER SIZE CONTROLS
+    // ══════════════════════════════════════
+
+    function wirePaperSizeControls() {
+        var paperSizeSelect = document.getElementById('paperSizeSelect');
+        var customGrid = document.getElementById('customPaperGrid');
+
+        if (paperSizeSelect) {
+            paperSizeSelect.addEventListener('change', function () {
+                settings.paperSize = this.value;
+                if (customGrid) {
+                    customGrid.style.display = this.value === 'custom' ? 'grid' : 'none';
+                }
+            });
+        }
+
+        // Custom paper size inputs
+        var widthInput = document.getElementById('paperWidth');
+        var heightInput = document.getElementById('paperHeight');
+        var unitSelect = document.getElementById('paperUnit');
+
+        if (widthInput) {
+            widthInput.addEventListener('change', function () {
+                settings.customPaperWidth = parseFloat(this.value) || 8.5;
+            });
+        }
+        if (heightInput) {
+            heightInput.addEventListener('change', function () {
+                settings.customPaperHeight = parseFloat(this.value) || 11;
+            });
+        }
+        if (unitSelect) {
+            unitSelect.addEventListener('change', function () {
+                settings.customPaperUnit = this.value;
+            });
+        }
+    }
+
+    // ══════════════════════════════════════
+    //  DUPLEX CONTROLS
+    // ══════════════════════════════════════
+
+    function wireDuplexControls() {
+        var radios = document.querySelectorAll('input[name="duplex"]');
+        radios.forEach(function (radio) {
+            radio.addEventListener('change', function () {
+                settings.duplex = this.value;
+            });
+        });
     }
 
     // ══════════════════════════════════════
@@ -168,7 +215,6 @@
             });
         }
 
-        // Try localhost first, fallback to 127.0.0.1
         var primary = 'http://localhost:8080/api/print-job/printers';
         var fallback = 'http://127.0.0.1:8080/api/print-job/printers';
 
@@ -180,7 +226,6 @@
                 onPrintersFetched(data);
             }).catch(function (err2) {
                 console.warn('[PrintAgent] Fallback fetch also failed:', err2);
-                // Try health endpoint to see if agent is running but printers endpoint is missing
                 tryFetch('http://localhost:8080/api/print-job/health').then(function () {
                     setOffline('Agent detected — printers endpoint missing (old version)');
                 }).catch(function () {
@@ -221,7 +266,6 @@
             callback();
         }
 
-        // Add change listener for printer select
         var printerSelect = document.getElementById('printerSelect');
         if (printerSelect) {
             printerSelect.addEventListener('change', function () {
@@ -289,14 +333,38 @@
                 case 'normal':
                     settings.marginTop = 25.4;
                     settings.marginBottom = 25.4;
-                    settings.marginLeft = 31.75;
-                    settings.marginRight = 31.75;
+                    settings.marginLeft = 25.4;
+                    settings.marginRight = 25.4;
                     break;
                 case 'narrow':
                     settings.marginTop = 12.7;
                     settings.marginBottom = 12.7;
                     settings.marginLeft = 12.7;
                     settings.marginRight = 12.7;
+                    break;
+                case 'moderate':
+                    settings.marginTop = 25.4;
+                    settings.marginBottom = 25.4;
+                    settings.marginLeft = 19.05;
+                    settings.marginRight = 19.05;
+                    break;
+                case 'wide':
+                    settings.marginTop = 25.4;
+                    settings.marginBottom = 25.4;
+                    settings.marginLeft = 50.8;
+                    settings.marginRight = 50.8;
+                    break;
+                case 'mirrored':
+                    settings.marginTop = 25.4;
+                    settings.marginBottom = 25.4;
+                    settings.marginLeft = 31.75;
+                    settings.marginRight = 25.4;
+                    break;
+                case 'office2003':
+                    settings.marginTop = 25.4;
+                    settings.marginBottom = 25.4;
+                    settings.marginLeft = 31.75;
+                    settings.marginRight = 31.75;
                     break;
                 case 'custom':
                     break;
@@ -345,8 +413,8 @@
             });
         }
 
-        // Start with Normal preset
-        updateMarginPreset('normal');
+        // Start with Narrow preset
+        updateMarginPreset('narrow');
     }
 
     // ══════════════════════════════════════
@@ -529,7 +597,7 @@
     }
 
     function getMarginPixels() {
-        var mmToPx = 3.7795275591; // 1mm ≈ 3.78px at 96dpi
+        var mmToPx = 3.7795275591;
         var inToPx = 96;
         var factor = settings.marginUnit === 'in' ? inToPx : mmToPx;
         var top = (settings.marginTop || 0) * factor;
@@ -592,7 +660,6 @@
     window.handlePrint = async function (event, bookId) {
         console.log('[Print] Starting print job for book', bookId);
 
-        // First check if agent is running
         try {
             var agentCheck = await fetch('http://127.0.0.1:8080/api/print-job/health', { mode: 'cors', cache: 'no-cache' });
             if (!agentCheck.ok) throw new Error('Not OK');
@@ -626,8 +693,8 @@
             var paperSizeSelect = document.getElementById('paperSizeSelect');
             var paperSize = paperSizeSelect ? paperSizeSelect.value : settings.paperSize;
 
-            var orientationSelect = document.getElementById('orientationSelect');
-            var orientation = orientationSelect ? orientationSelect.value : settings.orientation;
+            var duplexRadio = document.querySelector('input[name="duplex"]:checked');
+            var duplex = duplexRadio ? duplexRadio.value : settings.duplex;
 
             var scalingRadio = document.querySelector('input[name="scaling"]:checked');
             var scalingMode = scalingRadio ? scalingRadio.value : settings.scalingMode;
@@ -646,7 +713,7 @@
                 copies: copies,
                 printerName: printerName || undefined,
                 paperSize: paperSize,
-                orientation: orientation,
+                duplex: duplex,
                 scalingMode: scalingMode,
                 customScale: customScale,
                 marginUnit: marginUnit,
@@ -655,6 +722,17 @@
                 marginLeft: marginLeft,
                 marginRight: marginRight
             };
+
+            // If custom paper size, override paperSize with dimensions
+            if (paperSize === 'custom') {
+                var pw = parseFloat(document.getElementById('paperWidth').value) || 8.5;
+                var ph = parseFloat(document.getElementById('paperHeight').value) || 11;
+                var pu = document.getElementById('paperUnit') ? document.getElementById('paperUnit').value : 'in';
+                payload.paperSize = 'custom';
+                payload.customPaperWidth = pw;
+                payload.customPaperHeight = ph;
+                payload.customPaperUnit = pu;
+            }
 
             console.log('[Print] Sending to server:', payload);
 
@@ -698,7 +776,6 @@
                             jobSeenInQueue = true;
                             console.log('[Print] Job is still in queue, waiting for agent...');
                         } else {
-                            // Job not in queue → agent claimed it (or it was seen before and now gone)
                             if (jobSeenInQueue || i === 0) {
                                 agentClaimed = true;
                                 console.log('[Print] Agent claimed job!');

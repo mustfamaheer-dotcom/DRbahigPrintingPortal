@@ -84,28 +84,55 @@ else
 
                             <div class="settings-divider"></div>
 
-                            @* ─── Page Setup Section ─── *@
+                            @* ─── Paper Size Section ─── *@
                             <div class="settings-section">
-                                <div class="settings-label">Page Setup</div>
+                                <div class="settings-label">Paper Size</div>
                                 <div class="page-setup-row">
-                                    <div class="page-setup-field">
-                                        <span class="page-setup-field-label">Paper</span>
+                                    <div class="page-setup-field" style="width:100%">
                                         <select class="page-setup-select" id="paperSizeSelect">
-                                            <option value="A3">A3 (297×420mm)</option>
-                                            <option value="A4" selected>A4 (210×297mm)</option>
-                                            <option value="A5">A5 (148×210mm)</option>
-                                            <option value="Letter">Letter (216×279mm)</option>
-                                            <option value="Legal">Legal (216×356mm)</option>
-                                            <option value="Tabloid">Tabloid (279×432mm)</option>
+                                            <option value="Letter">Letter (8.5" × 11")</option>
+                                            <option value="A4" selected>A4 (8.27" × 11.69")</option>
+                                            <option value="Legal">Legal (8.5" × 14")</option>
+                                            <option value="A3">A3 (11.69" × 16.54")</option>
+                                            <option value="JISB4">JIS B4 (10.12" × 14.33")</option>
+                                            <option value="JISB5">JIS B5 (7.17" × 10.12")</option>
+                                            <option value="custom">More Paper Sizes…</option>
                                         </select>
                                     </div>
-                                    <div class="page-setup-field">
-                                        <span class="page-setup-field-label">Orient.</span>
-                                        <select class="page-setup-select" id="orientationSelect">
-                                            <option value="portrait" selected>Portrait</option>
-                                            <option value="landscape">Landscape</option>
+                                </div>
+                                <div class="custom-paper-grid" id="customPaperGrid" style="display:none">
+                                    <div class="margin-field">
+                                        <span class="margin-field-label">Width</span>
+                                        <input type="number" class="margin-input" id="paperWidth" value="8.5" min="1" max="100" step="0.01" />
+                                    </div>
+                                    <div class="margin-field">
+                                        <span class="margin-field-label">Height</span>
+                                        <input type="number" class="margin-input" id="paperHeight" value="11" min="1" max="100" step="0.01" />
+                                    </div>
+                                    <div class="margin-field margin-unit-field">
+                                        <span class="margin-field-label">Unit</span>
+                                        <select class="margin-unit-select" id="paperUnit">
+                                            <option value="in" selected>inches</option>
+                                            <option value="mm">mm</option>
                                         </select>
                                     </div>
+                                </div>
+                            </div>
+
+                            <div class="settings-divider"></div>
+
+                            @* ─── Print Mode Section ─── *@
+                            <div class="settings-section">
+                                <div class="settings-label">Print Mode</div>
+                                <div class="scaling-options" id="duplexOptions">
+                                    <label class="scaling-radio">
+                                        <input type="radio" name="duplex" value="off" checked />
+                                        <span>Print One Sided</span>
+                                    </label>
+                                    <label class="scaling-radio">
+                                        <input type="radio" name="duplex" value="long" />
+                                        <span>Manually Print on Both Sides</span>
+                                    </label>
                                 </div>
                             </div>
 
@@ -124,6 +151,10 @@ else
                                         <span>Fit to page</span>
                                     </label>
                                     <label class="scaling-radio">
+                                        <input type="radio" name="scaling" value="shrink" />
+                                        <span>Shrink oversized pages</span>
+                                    </label>
+                                    <label class="scaling-radio">
                                         <input type="radio" name="scaling" value="custom" />
                                         <span>Custom scale</span>
                                     </label>
@@ -140,27 +171,33 @@ else
                             @* ─── Margins Section ─── *@
                             <div class="settings-section">
                                 <div class="settings-label">Margins</div>
-                                <div class="margin-options" id="marginOptions">
-                                    <button class="margin-btn active" data-margin="normal">Normal</button>
-                                    <button class="margin-btn" data-margin="narrow">Narrow</button>
-                                    <button class="margin-btn" data-margin="custom">Custom</button>
+                                <div class="margin-options-group">
+                                    <div class="margin-options" id="marginOptions">
+                                        <button class="margin-btn" data-margin="normal">Normal</button>
+                                        <button class="margin-btn active" data-margin="narrow">Narrow</button>
+                                        <button class="margin-btn" data-margin="moderate">Moderate</button>
+                                        <button class="margin-btn" data-margin="wide">Wide</button>
+                                        <button class="margin-btn" data-margin="mirrored">Mirrored</button>
+                                        <button class="margin-btn" data-margin="office2003">Office 2003</button>
+                                        <button class="margin-btn" data-margin="custom">Custom Margins…</button>
+                                    </div>
                                 </div>
                                 <div class="custom-margin-grid" id="customMarginGrid">
                                     <div class="margin-field">
                                         <span class="margin-field-label">Top</span>
-                                        <input type="number" class="margin-input" id="marginTop" value="25.4" min="0" max="200" step="0.1" />
+                                        <input type="number" class="margin-input" id="marginTop" value="12.7" min="0" max="200" step="0.1" />
                                     </div>
                                     <div class="margin-field">
                                         <span class="margin-field-label">Bottom</span>
-                                        <input type="number" class="margin-input" id="marginBottom" value="25.4" min="0" max="200" step="0.1" />
+                                        <input type="number" class="margin-input" id="marginBottom" value="12.7" min="0" max="200" step="0.1" />
                                     </div>
                                     <div class="margin-field">
                                         <span class="margin-field-label">Left</span>
-                                        <input type="number" class="margin-input" id="marginLeft" value="31.75" min="0" max="200" step="0.1" />
+                                        <input type="number" class="margin-input" id="marginLeft" value="12.7" min="0" max="200" step="0.1" />
                                     </div>
                                     <div class="margin-field">
                                         <span class="margin-field-label">Right</span>
-                                        <input type="number" class="margin-input" id="marginRight" value="31.75" min="0" max="200" step="0.1" />
+                                        <input type="number" class="margin-input" id="marginRight" value="12.7" min="0" max="200" step="0.1" />
                                     </div>
                                     <div class="margin-field margin-unit-field">
                                         <span class="margin-field-label">Unit</span>

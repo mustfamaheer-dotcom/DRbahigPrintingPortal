@@ -134,8 +134,8 @@ public class PrintJobController : ControllerBase
         if (string.IsNullOrWhiteSpace(request.JobId))
             return BadRequest(new { success = false, error = "JobId is required." });
 
-        _logger.LogInformation("Received print job: {JobId}, Copies: {Copies}, Printer: {Printer}, Scaling: {Scaling}, Orientation: {Orientation}, PaperSize: {PaperSize}",
-            request.JobId, request.Copies, request.PrinterName, request.ScalingMode, request.Orientation, request.PaperSize);
+        _logger.LogInformation("Received print job: {JobId}, Copies: {Copies}, Printer: {Printer}, Scaling: {Scaling}, Duplex: {Duplex}, PaperSize: {PaperSize}",
+            request.JobId, request.Copies, request.PrinterName, request.ScalingMode, request.Duplex, request.PaperSize);
 
         try
         {
@@ -170,7 +170,7 @@ public class PrintJobController : ControllerBase
                 Copies = copies,
                 ScalingMode = request.ScalingMode ?? "actual",
                 CustomScale = request.CustomScale,
-                Orientation = request.Orientation ?? "portrait",
+                Duplex = request.Duplex ?? "off",
                 PaperSize = request.PaperSize ?? "A4",
                 MarginUnit = request.MarginUnit ?? "mm",
                 MarginTop = request.MarginTop ?? 0,
@@ -210,7 +210,7 @@ public class PrintJobRequest
     public int Copies { get; set; } = 1;
     public string? PrinterName { get; set; }
     public string? PaperSize { get; set; }
-    public string? Orientation { get; set; }
+    public string? Duplex { get; set; }
     public string? ScalingMode { get; set; }
     public int? CustomScale { get; set; }
     public string? MarginUnit { get; set; }
@@ -226,7 +226,7 @@ public class PrintSettings
     public int Copies { get; set; } = 1;
     public string ScalingMode { get; set; } = "actual";
     public int? CustomScale { get; set; }
-    public string Orientation { get; set; } = "portrait";
+    public string Duplex { get; set; } = "off";
     public string PaperSize { get; set; } = "A4";
     public string MarginUnit { get; set; } = "mm";
     public double MarginTop { get; set; }
