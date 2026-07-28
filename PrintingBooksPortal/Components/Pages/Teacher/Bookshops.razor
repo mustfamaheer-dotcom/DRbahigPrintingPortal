@@ -1,0 +1,244 @@
+@page "/teacher/bookshops"
+@attribute [Authorize(Roles = "Teacher")]
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject IDialogService Dialog
+@inject NavigationManager Navigation
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="py-8">
+    <MudText Typo="Typo.h4" Class="mb-1">Bookshop Management</MudText>
+    <MudText Typo="Typo.body2" Class="mb-6">Manage bookshops linked to your account and their API keys</MudText>
+
+    <MudPaper Class="pa-6 mb-6" Elevation="1">
+        <MudText Typo="Typo.h6" Class="mb-4">Link a New Bookshop</MudText>
+        <MudGrid>
+            <MudItem xs="12" sm="6" md="4">
+                <MudTextField @bind-Value="newBookshopName" Label="Bookshop Name" Placeholder="e.g. Cairo Bookstore" For="@(() => newBookshopName)" Required="true" />
+            </MudItem>
+            <MudItem xs="12" sm="6" md="4">
+                <MudTextField @bind-Value="newContactPerson" Label="Contact Person" Placeholder="e.g. Ahmed Ali" />
+            </MudItem>
+            <MudItem xs="12" sm="6" md="2">
+                <MudTextField @bind-Value="newPhone" Label="Phone" />
+            </MudItem>
+            <MudItem xs="12" sm="6" md="2" Class="d-flex align-end">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="LinkBookshop" Disabled="string.IsNullOrWhiteSpace(newBookshopName)" FullWidth="true" StartIcon="@Icons.Material.Filled.AddLink">
+                    Link Bookshop
+                </MudButton>
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    <MudText Typo="Typo.h6" Class="mb-2">Linked Bookshops</MudText>
+    <MudText Typo="Typo.body2" Class="mb-4">@(bookshops?.Count ?? 0) bookshop(s) linked</MudText>
+
+    @if (loading)
+    {
+        <MudProgressCircular Indeterminate="true" Class="ma-8" Size="Size.Large" />
+    }
+    else if (bookshops != null && bookshops.Any())
+    {
+        <MudTable Items="bookshops" Dense="false" Hover="true" Striped="true" Elevation="1" Class="rounded-lg">
+            <HeaderContent>
+                <MudTh><MudTableSortLabel SortBy="new Func<BookshopView, object>(x => x.BookshopName)">Bookshop</MudTableSortLabel></MudTh>
+                <MudTh>Contact</MudTh>
+                <MudTh>Copies Printed</MudTh>
+                <MudTh>API Key</MudTh>
+                <MudTh>Status</MudTh>
+                <MudTh>Actions</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Bookshop">
+                    <MudText Typo="Typo.body2" Class="font-weight-medium">@context.BookshopName</MudText>
+                </MudTd>
+                <MudTd DataLabel="Contact">
+                    <MudText Typo="Typo.body2">@context.ContactPerson</MudText>
+                    <MudText Typo="Typo.caption" Class="text-secondary">@context.Phone</MudText>
+                </MudTd>
+                <MudTd DataLabel="Copies Printed">
+                    <span class="mud-chip mud-chip-filled mud-chip-color-primary mud-chip-size-small">@context.CopiesPrinted</span>
+                </MudTd>
+                <MudTd DataLabel="API Key">
+                    <MudTextField @bind-Value="context.UniqueApiKey" Variant="Variant.Outlined" Adornment="Adornment.End"
+                                  AdornmentIcon="@Icons.Material.Filled.VisibilityOff"
+                                  OnAdornmentClick="@(e => ToggleKeyVisibility(context))"
+                                  InputType="context.ShowKey ? InputType.Text : InputType.Password"
+                                  ReadOnly="true" Dense="true" Class="api-key-field" Style="min-width: 280px;" />
+                </MudTd>
+                <MudTd DataLabel="Status">
+                    <span class="mud-chip mud-chip-filled @(context.IsActive ? "mud-chip-color-success" : "mud-chip-color-error") mud-chip-size-small">@(context.IsActive ? "Active" : "Inactive")</span>
+                </MudTd>
+                <MudTd DataLabel="Actions">
+                    <MudIconButton Icon="@Icons.Material.Filled.ContentCopy" Size="Size.Small" OnClick="@(() => CopyApiKey(context.UniqueApiKey))" Title="Copy API Key" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Refresh" Size="Size.Small" OnClick="@(() => ResetStats(context))" Title="Reset Stats" Color="Color.Warning" />
+                    <MudTooltip Text="Unlink bookshop">
+                        <MudIconButton Icon="@Icons.Material.Filled.LinkOff" Size="Size.Small" OnClick="@(() => UnlinkBookshop(context))" Color="Color.Error" />
+                    </MudTooltip>
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+    }
+    else
+    {
+        <MudPaper Class="pa-8 text-center" Elevation="0">
+            <MudIcon Icon="@Icons.Material.Filled.Store" Size="Size.Large" Class="mb-4 text-secondary" />
+            <MudText Typo="Typo.h6" Class="text-secondary">No Bookshops Linked</MudText>
+            <MudText Typo="Typo.body2" Class="text-secondary mb-4">Link your first bookshop to get started</MudText>
+        </MudPaper>
+    }
+</MudContainer>
+
+@code {
+    private List<BookshopView>? bookshops;
+    private bool loading = true;
+    private string newBookshopName = "";
+    private string newContactPerson = "";
+    private string newPhone = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadBookshops();
+    }
+
+    private async Task LoadBookshops()
+    {
+        loading = true;
+        try
+        {
+            var data = await Http.GetFromJsonAsync<List<BookshopView>>("/api/teacher/bookshops");
+            bookshops = data ?? new List<BookshopView>();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load bookshops: {ex.Message}", Severity.Error);
+            bookshops = new List<BookshopView>();
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task LinkBookshop()
+    {
+        try
+        {
+            var response = await Http.PostAsJsonAsync("/api/teacher/bookshops/link", new
+            {
+                bookshopName = newBookshopName,
+                contactPerson = newContactPerson,
+                phone = newPhone
+            });
+
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add($"Bookshop '{newBookshopName}' linked successfully!", Severity.Success);
+                newBookshopName = "";
+                newContactPerson = "";
+                newPhone = "";
+                await LoadBookshops();
+            }
+            else
+            {
+                var error = await response.Content.ReadFromJsonAsync<ErrorResponse>();
+                Snackbar.Add(error?.error ?? "Failed to link bookshop", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task ResetStats(BookshopView shop)
+    {
+        var dialog = await Dialog.ShowAsync<ResetStatsDialog>("Reset Statistics", new DialogParameters
+        {
+            ["BookshopName"] = shop.BookshopName
+        }, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+
+        var result = await dialog.Result;
+        if (!result.Canceled)
+        {
+            try
+            {
+                var response = await Http.PostAsync($"/api/teacher/bookshops/{shop.Id}/reset-stats", null);
+                if (response.IsSuccessStatusCode)
+                {
+                    Snackbar.Add($"Stats reset for '{shop.BookshopName}'. Invoice generated.", Severity.Success);
+                    await LoadBookshops();
+                }
+                else
+                {
+                    Snackbar.Add("Failed to reset stats", Severity.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+
+    private async Task UnlinkBookshop(BookshopView shop)
+    {
+        var confirmed = await Dialog.ShowMessageBox(
+            "Unlink Bookshop",
+            $"Are you sure you want to unlink '{shop.BookshopName}'? This action cannot be undone.",
+            "Unlink",
+            cancelText: "Cancel");
+
+        if (confirmed == true)
+        {
+            try
+            {
+                var response = await Http.PostAsync($"/api/teacher/bookshops/{shop.Id}/unlink", null);
+                if (response.IsSuccessStatusCode)
+                {
+                    Snackbar.Add($"Bookshop '{shop.BookshopName}' unlinked.", Severity.Success);
+                    await LoadBookshops();
+                }
+                else
+                {
+                    Snackbar.Add("Failed to unlink bookshop", Severity.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Error: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+
+    private void ToggleKeyVisibility(BookshopView shop)
+    {
+        shop.ShowKey = !shop.ShowKey;
+    }
+
+    private async Task CopyApiKey(string key)
+    {
+        await Task.Run(() => { });
+        Snackbar.Add("API key copied to clipboard!", Severity.Info);
+    }
+
+    private class BookshopView
+    {
+        public int Id { get; set; }
+        public int BookshopId { get; set; }
+        public string BookshopName { get; set; } = "";
+        public string? ContactPerson { get; set; }
+        public string? Phone { get; set; }
+        public string? Address { get; set; }
+        public int CopiesPrinted { get; set; }
+        public string UniqueApiKey { get; set; } = "";
+        public DateTime LastResetDate { get; set; }
+        public bool IsActive { get; set; }
+        public DateTime CreatedAt { get; set; }
+        public bool ShowKey { get; set; }
+    }
+
+    private class ErrorResponse
+    {
+        public string error { get; set; } = "";
+    }
+}

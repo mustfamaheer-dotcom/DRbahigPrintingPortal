@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using MudBlazor.Services;
 using PrintingBooksPortal.Components;
 using PrintingBooksPortal.Data;
 using PrintingBooksPortal.Hubs;
@@ -36,9 +37,9 @@ builder.Services.ConfigureApplicationCookie(options =>
     options.LogoutPath = "/logout";
     options.AccessDeniedPath = "/access-denied";
     options.Cookie.HttpOnly = true;
-    options.Cookie.SecurePolicy = CookieSecurePolicy.Always;     // Security: HTTPS-only cookies
-    options.Cookie.SameSite = SameSiteMode.Strict;                // Security: prevent CSRF
-    options.Cookie.IsEssential = true;                            // Security: GDPR-compliant auth
+    options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+    options.Cookie.SameSite = SameSiteMode.Strict;
+    options.Cookie.IsEssential = true;
     options.ExpireTimeSpan = TimeSpan.FromHours(8);
     options.SlidingExpiration = true;
 });
@@ -46,9 +47,10 @@ builder.Services.ConfigureApplicationCookie(options =>
 builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy("AdminOnly", policy => policy.RequireRole("Admin"));
-    options.AddPolicy("ShopOnly", policy => policy.RequireRole("Shop"));
+    options.AddPolicy("TeacherOnly", policy => policy.RequireRole("Teacher"));
 });
 
+builder.Services.AddScoped<ITenantContext, TenantContext>();
 builder.Services.AddScoped<FileStorageService>();
 builder.Services.AddScoped<PrintLoggingService>();
 builder.Services.AddScoped<IWatermarkService, WatermarkService>();
@@ -56,6 +58,7 @@ builder.Services.AddScoped<ISettingsService, SettingsService>();
 builder.Services.AddSingleton<PrintTokenService>();
 builder.Services.AddSingleton<IPdfSecurityService, PdfSecurityService>();
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddMudServices();
 
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
@@ -63,11 +66,10 @@ builder.Services.AddRazorComponents()
 builder.Services.AddControllers();
 builder.Services.AddSignalR();
 builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(builder.Configuration["AppUrl"] ?? "http://localhost:5035") });
+builder.Services.AddHostedService<StaleJobMonitor>();
 
 var app = builder.Build();
 
-// Security: trust X-Forwarded-Proto/X-Forwarded-Host from the reverse proxy (RunASP.NET load balancer)
-// so that UseHttpsRedirection() and CookieSecurePolicy.Always work correctly behind SSL termination.
 app.UseForwardedHeaders(new ForwardedHeadersOptions
 {
     ForwardedHeaders = ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost | ForwardedHeaders.XForwardedFor
@@ -76,18 +78,19 @@ app.UseForwardedHeaders(new ForwardedHeadersOptions
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
-    app.UseHsts();   // Security: HTTP Strict-Transport-Security header
+    app.UseHsts();
 }
 else
 {
     app.UseDeveloperExceptionPage();
 }
 
-app.UseHttpsRedirection();  // Security: redirect HTTP → HTTPS
+app.UseHttpsRedirection();
 app.UseStaticFiles();
 app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseMiddleware<TenantContextMiddleware>();
 app.UseAntiforgery();
 
 app.MapStaticAssets();
@@ -106,24 +109,35 @@ try
     {
         try
         {
+            // Ensure missing columns exist on AspNetUsers (legacy schema fix)
+            await db.Database.ExecuteSqlRawAsync(@"
+                IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='AspNetUsers' AND COLUMN_NAME='Role')
+                ALTER TABLE [AspNetUsers] ADD [Role] int NOT NULL DEFAULT 0;
+                IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='AspNetUsers' AND COLUMN_NAME='TeacherId')
+                ALTER TABLE [AspNetUsers] ADD [TeacherId] int NULL;
+                IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='AspNetUsers' AND COLUMN_NAME='FullName')
+                ALTER TABLE [AspNetUsers] ADD [FullName] nvarchar(max) NULL;
+            ");
+            logger.LogInformation("Schema fix applied (missing columns added).");
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Schema fix could not be applied.");
+        }
+
+        try
+        {
             await db.Database.MigrateAsync();
             logger.LogInformation("Database migrations applied successfully.");
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "Could not apply migrations automatically. The SettingsService will auto-create the SystemSettings table on first access.");
+            logger.LogWarning(ex, "Could not apply migrations automatically.");
         }
     }
     else
     {
-        try
-        {
-            await db.Database.MigrateAsync();
-        }
-        catch
-        {
-            await db.Database.EnsureCreatedAsync();
-        }
+        await db.Database.EnsureCreatedAsync();
     }
 
     var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();

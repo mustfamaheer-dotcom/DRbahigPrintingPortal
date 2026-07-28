@@ -15,21 +15,22 @@ public class PrintLoggingService
         _httpContextAccessor = httpContextAccessor;
     }
 
-    public async Task LogPrintAsync(int shopId, int bookId, int copies, string? userId, string? userName)
+    public async Task LogPrintAsync(int teacherId, int? teacherBookshopLinkId, int bookId, int copies, string? userId, string? userName)
     {
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-        var shop = await db.Shops.FindAsync(shopId);
+        var teacher = await db.Teachers.FindAsync(teacherId);
         var book = await db.Books.FindAsync(bookId);
 
-        if (shop == null || book == null) return;
+        if (teacher == null || book == null) return;
 
         var log = new PrintLog
         {
-            ShopId = shopId,
+            TeacherId = teacherId,
+            TeacherBookshopLinkId = teacherBookshopLinkId,
             BookId = bookId,
-            ShopName = shop.Name,
+            ShopName = teacher.Name,
             BookTitle = book.Title,
             Copies = copies,
             PrintedByUserId = userId,
@@ -59,14 +60,14 @@ public class PrintLoggingService
         return await db.PrintLogs.SumAsync(l => l.Copies);
     }
 
-    public async Task<Dictionary<string, int>> GetPrintsPerShopAsync()
+    public async Task<Dictionary<string, int>> GetPrintsPerTeacherAsync()
     {
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         return await db.PrintLogs
             .GroupBy(l => l.ShopName)
-            .Select(g => new { Shop = g.Key, Total = g.Sum(l => l.Copies) })
-            .ToDictionaryAsync(x => x.Shop, x => x.Total);
+            .Select(g => new { Teacher = g.Key, Total = g.Sum(l => l.Copies) })
+            .ToDictionaryAsync(x => x.Teacher, x => x.Total);
     }
 
     public async Task<Dictionary<string, int>> GetPrintsPerBookAsync()
@@ -79,12 +80,12 @@ public class PrintLoggingService
             .ToDictionaryAsync(x => x.Book, x => x.Total);
     }
 
-    public async Task<List<PrintLog>> GetShopLogsAsync(int shopId, int count = 100)
+    public async Task<List<PrintLog>> GetTeacherLogsAsync(int teacherId, int count = 100)
     {
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         return await db.PrintLogs
-            .Where(l => l.ShopId == shopId)
+            .Where(l => l.TeacherId == teacherId)
             .OrderByDescending(l => l.PrintedAt)
             .Take(count)
             .ToListAsync();

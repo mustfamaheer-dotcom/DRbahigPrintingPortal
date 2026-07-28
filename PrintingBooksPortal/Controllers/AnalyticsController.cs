@@ -22,12 +22,12 @@ public class AnalyticsController : ControllerBase
     {
         var logs = _db.PrintLogs.AsNoTracking();
 
-        var perShop = await logs
-            .GroupBy(l => new { l.ShopId, l.ShopName, l.BookId, l.BookTitle })
+        var perTeacher = await logs
+            .GroupBy(l => new { l.TeacherId, l.ShopName, l.BookId, l.BookTitle })
             .Select(g => new
             {
-                ShopId = g.Key.ShopId,
-                ShopName = g.Key.ShopName,
+                TeacherId = g.Key.TeacherId,
+                TeacherName = g.Key.ShopName,
                 BookId = g.Key.BookId,
                 BookTitle = g.Key.BookTitle,
                 TotalCopies = g.Sum(l => l.Copies),
@@ -83,7 +83,7 @@ public class AnalyticsController : ControllerBase
 
         return Ok(new
         {
-            perShop,
+            perTeacher,
             daily,
             weekly,
             recent

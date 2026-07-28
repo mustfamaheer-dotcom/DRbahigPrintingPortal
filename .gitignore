@@ -72,3 +72,4 @@ Thumbs.db
 ## Secrets
 appsettings.*.local.json
 **/appsettings.json
+deployment credentials

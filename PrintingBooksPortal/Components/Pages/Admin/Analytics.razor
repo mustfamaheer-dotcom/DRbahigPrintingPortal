@@ -232,10 +232,13 @@
     private async Task LoadDataAsync()
     {
         totalPrints = await PrintLogging.GetTotalPrintsAsync();
-        activeShops = await Db.Shops.CountAsync(s => s.IsActive);
+        activeShops = await Db.Bookshops.CountAsync(s => s.IsActive);
         totalBooks = await Db.Books.CountAsync(b => b.IsActive);
         totalLogs = await Db.PrintLogs.CountAsync();
-        printsPerShop = await PrintLogging.GetPrintsPerShopAsync();
+        printsPerShop = await Db.PrintLogs
+            .GroupBy(l => l.ShopName)
+            .Select(g => new { Shop = g.Key, Total = g.Sum(l => l.Copies) })
+            .ToDictionaryAsync(x => x.Shop, x => x.Total);
         printsPerBook = await PrintLogging.GetPrintsPerBookAsync();
         recentLogs = await PrintLogging.GetRecentLogsAsync(100);
 

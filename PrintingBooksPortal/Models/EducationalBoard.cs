@@ -6,6 +6,8 @@ public class EducationalBoard
 {
     public int Id { get; set; }
 
+    public int? TeacherId { get; set; }
+
     [Required, MaxLength(200)]
     public string Name { get; set; } = string.Empty;
 
@@ -16,5 +18,6 @@ public class EducationalBoard
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
+    public Teacher? Teacher { get; set; }
     public ICollection<Book> Books { get; set; } = new List<Book>();
 }

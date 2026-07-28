@@ -1,0 +1,114 @@
+@page "/teacher/mybooks"
+@attribute [Authorize(Roles = "Teacher")]
+@inject AppDbContext Db
+@inject UserManager<ApplicationUser> UserManager
+@inject AuthenticationStateProvider AuthState
+@inject ITenantContext Tenant
+@inject NavigationManager Navigation
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="py-8">
+    <MudText Typo="Typo.h4" Class="mb-1">My Books</MudText>
+    <MudText Typo="Typo.body2" Class="mb-6">Browse and print books from your educational boards</MudText>
+
+    @if (error != null)
+    {
+        <MudAlert Severity="Severity.Error" Class="mb-4">@error</MudAlert>
+    }
+
+    @if (booksByBoard == null)
+    {
+        <div class="d-flex justify-center ma-8">
+            <MudProgressCircular Indeterminate="true" Size="Size.Large" />
+        </div>
+    }
+    else if (!booksByBoard.Any())
+    {
+        <MudPaper Class="pa-8 text-center" Elevation="0">
+            <MudIcon Icon="@Icons.Material.Filled.Book" Size="Size.Large" Class="mb-4 text-secondary" />
+            <MudText Typo="Typo.h6" Class="text-secondary">No Books</MudText>
+            <MudText Typo="Typo.body2" Class="text-secondary">You haven't added any books yet.</MudText>
+        </MudPaper>
+    }
+    else
+    {
+        @foreach (var group in booksByBoard)
+        {
+            <MudText Typo="Typo.h6" Class="mb-2 mt-4">@group.BoardName</MudText>
+            <MudText Typo="Typo.body2" Class="mb-3 text-secondary">@group.Books.Count book(s)</MudText>
+            <MudGrid>
+                @foreach (var book in group.Books)
+                {
+                    <MudItem xs="12" sm="6" md="4" lg="3">
+                        <MudPaper Class="pa-4" Elevation="1">
+                            <MudText Typo="Typo.body1" Class="font-weight-medium mb-2">@book.Title</MudText>
+                            <MudText Typo="Typo.caption" Class="text-secondary d-block mb-3">
+                                @FormatSize(book.FileSizeBytes) | @book.PageCount pages
+                            </MudText>
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small"
+                                       OnClick="@(() => NavigateToViewer(book.Id))"
+                                       StartIcon="@Icons.Material.Filled.OpenInNew" FullWidth="true">
+                                Open & Print
+                            </MudButton>
+                        </MudPaper>
+                    </MudItem>
+                }
+            </MudGrid>
+        }
+    }
+</MudContainer>
+
+@code {
+    private List<BoardGroup>? booksByBoard;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            if (Tenant.TeacherId == null)
+            {
+                error = "Your account is not linked to any teacher.";
+                return;
+            }
+
+            var books = await Db.Books
+                .Where(b => b.TeacherId == Tenant.TeacherId.Value && b.IsActive)
+                .Include(b => b.Board)
+                .ToListAsync();
+
+            booksByBoard = books
+                .GroupBy(b => b.Board.Name)
+                .Select(g => new BoardGroup
+                {
+                    BoardName = g.Key,
+                    Books = g.ToList()
+                })
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            error = $"Error loading books: {ex.Message}";
+        }
+    }
+
+    private void NavigateToViewer(int bookId)
+    {
+        Navigation.NavigateTo($"/teacher/viewer/{bookId}");
+    }
+
+    private static string FormatSize(long bytes)
+    {
+        return bytes switch
+        {
+            >= 1_000_000 => $"{bytes / 1_000_000.0:F1} MB",
+            >= 1_000 => $"{bytes / 1_000.0:F1} KB",
+            _ => $"{bytes} B"
+        };
+    }
+
+    private class BoardGroup
+    {
+        public string BoardName { get; set; } = "";
+        public List<Book> Books { get; set; } = new();
+    }
+}

@@ -201,7 +201,7 @@
     protected override async Task OnInitializedAsync()
     {
         totalBooks = await Db.Books.CountAsync(b => b.IsActive);
-        activeShops = await Db.Shops.CountAsync(s => s.IsActive);
+        activeShops = await Db.Bookshops.CountAsync(s => s.IsActive);
         totalBoards = await Db.EducationalBoards.CountAsync(b => b.IsActive);
         totalPrints = await PrintLogging.GetTotalPrintsAsync();
         recentLogs = await PrintLogging.GetRecentLogsAsync(5);

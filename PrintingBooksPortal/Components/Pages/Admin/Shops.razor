@@ -199,13 +199,13 @@
 </div>
 
 @code {
-    private List<Shop>? shops;
+    private List<Bookshop>? shops;
     private ShopEditModel editModel = new();
     private bool editing;
     private int editingId;
     private bool showModal;
     private bool showDeleteModal;
-    private Shop? deletingShop;
+    private Bookshop? deletingShop;
     private string? message;
     private string? error;
 
@@ -222,10 +222,10 @@
 
     private async Task LoadShops()
     {
-        shops = await Db.Shops.OrderBy(s => s.Name).ToListAsync<Shop>();
+        shops = await Db.Bookshops.OrderBy(s => s.Name).ToListAsync();
     }
 
-    private void EditShop(Shop shop)
+    private void EditShop(Bookshop shop)
     {
         editing = true;
         editingId = shop.Id;
@@ -241,7 +241,7 @@
 
         if (editing)
         {
-            var shop = await Db.Shops.FindAsync(editingId);
+            var shop = await Db.Bookshops.FindAsync(editingId);
             if (shop != null)
             {
                 shop.Name = editModel.Name;
@@ -265,13 +265,13 @@
                 return;
             }
 
-            var shop = new Shop
+            var shop = new Bookshop
             {
                 Name = editModel.Name,
                 Address = editModel.Address,
                 Phone = editModel.Phone
             };
-            Db.Shops.Add(shop);
+            Db.Bookshops.Add(shop);
             await Db.SaveChangesAsync();
 
             var user = new ApplicationUser
@@ -279,7 +279,7 @@
                 UserName = editModel.Email,
                 Email = editModel.Email,
                 FullName = editModel.Name,
-                ShopId = shop.Id,
+                TeacherId = shop.Id,
                 EmailConfirmed = true
             };
 
@@ -291,7 +291,7 @@
             }
             else
             {
-                Db.Shops.Remove(shop);
+                Db.Bookshops.Remove(shop);
                 await Db.SaveChangesAsync();
                 error = $"Failed to create user: {string.Join(", ", result.Errors.Select(e => e.Description))}";
                 return;
@@ -305,7 +305,7 @@
         editing = false;
     }
 
-    private async Task ToggleShop(Shop shop)
+    private async Task ToggleShop(Bookshop shop)
     {
         shop.IsActive = !shop.IsActive;
         await Db.SaveChangesAsync();
@@ -315,11 +315,11 @@
     private async Task ConfirmDelete()
     {
         if (deletingShop == null) return;
-        var users = await UserManager.Users.Where(u => u.ShopId == deletingShop.Id).ToListAsync();
+        var users = await UserManager.Users.Where(u => u.TeacherId == deletingShop.Id).ToListAsync();
         foreach (var user in users)
             await UserManager.DeleteAsync(user);
 
-        Db.Shops.Remove(deletingShop);
+        Db.Bookshops.Remove(deletingShop);
         await Db.SaveChangesAsync();
         await LoadShops();
         message = "Shop deleted.";
@@ -327,7 +327,7 @@
         deletingShop = null;
     }
 
-    private void OpenReset(Shop shop)
+    private void OpenReset(Bookshop shop)
     {
         resettingShopId = shop.Id;
         resettingShopName = shop.Name;
@@ -351,7 +351,7 @@
             return;
         }
 
-        var logs = await Db.PrintLogs.Where(l => l.ShopId == resettingShopId).ToListAsync();
+        var logs = await Db.PrintLogs.Where(l => l.TeacherId == resettingShopId).ToListAsync();
         Db.PrintLogs.RemoveRange(logs);
         await Db.SaveChangesAsync();
         message = $"Statistics reset for '{resettingShopName}' ({logs.Count} log entries removed).";

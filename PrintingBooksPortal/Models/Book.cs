@@ -6,6 +6,8 @@ public class Book
 {
     public int Id { get; set; }
 
+    public int? TeacherId { get; set; }
+
     [Required, MaxLength(300)]
     public string Title { get; set; } = string.Empty;
 
@@ -25,7 +27,7 @@ public class Book
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
+    public Teacher? Teacher { get; set; }
     public EducationalBoard Board { get; set; } = null!;
-    public ICollection<ShopBookAssignment> Assignments { get; set; } = new List<ShopBookAssignment>();
     public ICollection<PrintLog> PrintLogs { get; set; } = new List<PrintLog>();
 }

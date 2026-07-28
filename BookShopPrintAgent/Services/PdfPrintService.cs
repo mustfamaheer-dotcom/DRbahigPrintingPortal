@@ -70,11 +70,14 @@ public class PdfPrintService
         {
             var sumatraExe = FindPdfReader();
             if (string.IsNullOrEmpty(sumatraExe))
-                throw new InvalidOperationException("SumatraPDF not found. Please run a fresh install of BookShopAgent.");
+                throw new InvalidOperationException("SumatraPDF not found. Please ensure SumatraPDF-3.6.1-64.exe is in the same directory as the agent executable.");
 
             _logger.LogInformation("Using SumatraPDF: {Exe}", sumatraExe);
 
-            // PDF is already pre-sized with correct scale/margins/orientation — use noscale
+            // PDF is pre-processed by ApplyPdfSettings with correct page dimensions.
+            // noscale: SumatraPDF must NOT override our pre-calculated layout.
+            // landscape/portrait: tell the printer driver which paper orientation to use
+            // so the pre-sized page fits correctly on the physical paper.
             var printSettingsParts = new List<string> { "noscale" };
             if (settings.Orientation == "landscape")
                 printSettingsParts.Add("landscape");
@@ -83,8 +86,8 @@ public class PdfPrintService
 
             for (int i = 0; i < settings.Copies; i++)
             {
-                _logger.LogInformation("Printing copy {Copy}/{Copies} for job {JobId}, printer={Printer}, orientation={Orient}, margins=({Ml},{Mr},{Mt},{Mb}), scale={Scale}%",
-                    i + 1, settings.Copies, jobId, settings.PrinterName, settings.Orientation,
+                _logger.LogInformation("Printing copy {Copy}/{Copies} for job {JobId}, printer={Printer}, orientation={Orient}, paper={Paper}, margins=({Ml},{Mr},{Mt},{Mb}), scale={Scale}%",
+                    i + 1, settings.Copies, jobId, settings.PrinterName, settings.Orientation, settings.PaperSize,
                     settings.MarginLeft, settings.MarginRight, settings.MarginTop, settings.MarginBottom,
                     settings.ScalingMode == "custom" ? settings.CustomScale?.ToString() ?? "100" : settings.ScalingMode);
 
@@ -97,17 +100,44 @@ public class PdfPrintService
                     FileName = sumatraExe,
                     Arguments = printArg,
                     WindowStyle = ProcessWindowStyle.Hidden,
-                    CreateNoWindow = true
+                    CreateNoWindow = true,
+                    RedirectStandardError = true,
+                    RedirectStandardOutput = true,
+                    UseShellExecute = false
                 };
                 _logger.LogInformation("Process start: {Exe} {Args}", sumatraExe, printArg);
 
-                using var process = Process.Start(psi);
-                if (process != null)
+                try
                 {
-                    if (process.WaitForExit(60000))
-                        _logger.LogInformation("SumatraPDF printed successfully (exit code {Code})", process.ExitCode);
-                    else
-                        _logger.LogWarning("SumatraPDF did not exit within 60 seconds for job {JobId}", jobId);
+                    using var process = Process.Start(psi);
+                    if (process != null)
+                    {
+                        if (process.WaitForExit(60000))
+                        {
+                            if (process.ExitCode != 0)
+                            {
+                                var stdErr = process.StandardError.ReadToEnd();
+                                var stdOut = process.StandardOutput.ReadToEnd();
+                                _logger.LogWarning("SumatraPDF exited with code {Code} for job {JobId}. StdErr: {StdErr}, StdOut: {StdOut}",
+                                    process.ExitCode, jobId, stdErr, stdOut);
+                            }
+                            else
+                            {
+                                _logger.LogInformation("SumatraPDF printed successfully (exit code {Code})", process.ExitCode);
+                            }
+                        }
+                        else
+                        {
+                            _logger.LogWarning("SumatraPDF did not exit within 60 seconds for job {JobId}", jobId);
+                            try { process.Kill(); } catch { }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to start SumatraPDF for job {JobId}. ExitCode: {Code}", jobId,
+                        ex is System.ComponentModel.Win32Exception winEx ? winEx.NativeErrorCode : -1);
+                    throw new InvalidOperationException($"SumatraPDF execution failed: {ex.Message}", ex);
                 }
             }
         }

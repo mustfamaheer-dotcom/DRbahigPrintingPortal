@@ -1,0 +1,80 @@
+@page "/teacher/history"
+@attribute [Authorize(Roles = "Teacher")]
+@inject AppDbContext Db
+@inject ITenantContext Tenant
+@inject ISnackbar Snackbar
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="py-8">
+    <MudText Typo="Typo.h4" Class="mb-1">Print History</MudText>
+    <MudText Typo="Typo.body2" Class="mb-6">View your printing activity</MudText>
+
+    @if (logs == null)
+    {
+        <div class="d-flex justify-center ma-8">
+            <MudProgressCircular Indeterminate="true" Size="Size.Large" />
+        </div>
+    }
+    else if (!logs.Any())
+    {
+        <MudPaper Class="pa-8 text-center" Elevation="0">
+            <MudIcon Icon="@Icons.Material.Filled.History" Size="Size.Large" Class="mb-4 text-secondary" />
+            <MudText Typo="Typo.h6" Class="text-secondary">No Print History</MudText>
+            <MudText Typo="Typo.body2" Class="text-secondary">No printing activity recorded yet.</MudText>
+        </MudPaper>
+    }
+    else
+    {
+        <MudPaper Elevation="1" Class="rounded-lg overflow-hidden">
+            <MudSimpleTable>
+                <thead>
+                    <tr>
+                        <th>Date/Time</th>
+                        <th>Book</th>
+                        <th>Copies</th>
+                        <th>Printed By</th>
+                        <th>Shop</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var log in logs)
+                    {
+                        <tr>
+                            <td class="text-secondary">@log.PrintedAt.ToLocalTime().ToString("g")</td>
+                            <td><strong>@log.BookTitle</strong></td>
+                            <td><span class="mud-chip mud-chip-filled mud-chip-color-primary mud-chip-size-small">@log.Copies</span></td>
+                            <td>@log.PrintedByUserName</td>
+                            <td>@log.ShopName</td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        </MudPaper>
+
+        <MudText Typo="Typo.body2" Class="mt-2 text-secondary">
+            Total: <strong>@logs.Sum(l => l.Copies)</strong> copies
+        </MudText>
+    }
+</MudContainer>
+
+@code {
+    private List<PrintLog>? logs;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            if (Tenant.TeacherId != null)
+            {
+                logs = await Db.PrintLogs
+                    .Where(l => l.TeacherId == Tenant.TeacherId.Value)
+                    .OrderByDescending(l => l.PrintedAt)
+                    .Take(200)
+                    .ToListAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading history: {ex.Message}", Severity.Error);
+        }
+    }
+}

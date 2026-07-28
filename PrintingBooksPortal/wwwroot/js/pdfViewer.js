@@ -742,4 +742,95 @@
             if (printBtn) printBtn.focus({ preventScroll: false });
         });
     }
+
+    // ══════════════════════════════════════
+    //  SIGNALR FEEDBACK LOOP
+    // ══════════════════════════════════════
+
+    var signalrConnection = null;
+
+    function loadSignalR(callback) {
+        if (window.signalR) {
+            callback();
+            return;
+        }
+        var script = document.createElement('script');
+        script.src = '/js/signalr.min.js';
+        script.onload = function () {
+            if (window.signalR) {
+                callback();
+            } else {
+                console.warn('[SignalR] Loaded but signalR not found on window');
+                callback();
+            }
+        };
+        script.onerror = function () {
+            console.warn('[SignalR] Failed to load signalr.min.js from server');
+            callback();
+        };
+        document.head.appendChild(script);
+    }
+
+    function connectSignalR() {
+        if (signalrConnection && signalrConnection.state === 'Connected') {
+            return Promise.resolve();
+        }
+
+        return new Promise(function (resolve) {
+            loadSignalR(function () {
+                if (!window.signalR) {
+                    console.warn('[SignalR] Not available, using REST polling');
+                    resolve(false);
+                    return;
+                }
+
+                signalrConnection = new signalR.HubConnectionBuilder()
+                    .withUrl('/hubs/print')
+                    .withAutomaticReconnect([0, 2000, 5000, 15000, 30000])
+                    .build();
+
+                signalrConnection.on('PrintStatusChanged', function (data) {
+                    console.log('[SignalR] PrintStatusChanged:', data);
+
+                    showPrintModal(
+                        data.status === 'completed' || data.status === 'queued',
+                        data.message || data.status,
+                        data.message
+                    );
+                });
+
+                signalrConnection.onclose(function () {
+                    console.log('[SignalR] Connection closed');
+                });
+
+                signalrConnection.start()
+                    .then(function () {
+                        console.log('[SignalR] Connected to PrintHub');
+                        resolve(true);
+                    })
+                    .catch(function (err) {
+                        console.warn('[SignalR] Connection failed:', err);
+                        resolve(false);
+                    });
+            });
+        });
+    }
+
+    // Connect SignalR on page load
+    if (document.getElementById('pdfViewer')) {
+        setTimeout(function () {
+            connectSignalR();
+        }, 500);
+    }
+
+    // Wrap the original handlePrint to also trigger SignalR
+    var originalHandlePrint = window.handlePrint;
+    window.handlePrint = async function (event, bookId) {
+        // Connect SignalR first (or try)
+        await connectSignalR();
+
+        // Call original print handler
+        return originalHandlePrint(event, bookId);
+    };
+
 })();

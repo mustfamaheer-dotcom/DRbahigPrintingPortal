@@ -200,10 +200,13 @@ namespace PrintingBooksPortal.Migrations
                     b.Property<bool>("PhoneNumberConfirmed")
                         .HasColumnType("bit");
 
+                    b.Property<int>("Role")
+                        .HasColumnType("int");
+
                     b.Property<string>("SecurityStamp")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<int?>("ShopId")
+                    b.Property<int?>("TeacherId")
                         .HasColumnType("int");
 
                     b.Property<bool>("TwoFactorEnabled")
@@ -223,7 +226,7 @@ namespace PrintingBooksPortal.Migrations
                         .HasDatabaseName("UserNameIndex")
                         .HasFilter("[NormalizedUserName] IS NOT NULL");
 
-                    b.HasIndex("ShopId");
+                    b.HasIndex("TeacherId");
 
                     b.ToTable("AspNetUsers", (string)null);
                 });
@@ -260,6 +263,9 @@ namespace PrintingBooksPortal.Migrations
                     b.Property<int>("PageCount")
                         .HasColumnType("int");
 
+                    b.Property<int?>("TeacherId")
+                        .HasColumnType("int");
+
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasMaxLength(300)
@@ -269,7 +275,47 @@ namespace PrintingBooksPortal.Migrations
 
                     b.HasIndex("BoardId");
 
+                    b.HasIndex("TeacherId");
+
                     b.ToTable("Books");
+                });
+
+            modelBuilder.Entity("PrintingBooksPortal.Models.Bookshop", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Address")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("ContactPerson")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Phone")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name");
+
+                    b.ToTable("Bookshops");
                 });
 
             modelBuilder.Entity("PrintingBooksPortal.Models.EducationalBoard", b =>
@@ -295,9 +341,58 @@ namespace PrintingBooksPortal.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<int?>("TeacherId")
+                        .HasColumnType("int");
+
                     b.HasKey("Id");
 
+                    b.HasIndex("TeacherId");
+
                     b.ToTable("EducationalBoards");
+                });
+
+            modelBuilder.Entity("PrintingBooksPortal.Models.Invoice", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime?>("PaidAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("PeriodEnd")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("PeriodStart")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<int>("TeacherBookshopLinkId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("TotalAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("TotalCopies")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TeacherBookshopLinkId");
+
+                    b.ToTable("Invoices");
                 });
 
             modelBuilder.Entity("PrintingBooksPortal.Models.PrintLog", b =>
@@ -334,13 +429,16 @@ namespace PrintingBooksPortal.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
-                    b.Property<int>("ShopId")
-                        .HasColumnType("int");
-
                     b.Property<string>("ShopName")
                         .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
+
+                    b.Property<int?>("TeacherBookshopLinkId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("TeacherId")
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
@@ -348,71 +446,11 @@ namespace PrintingBooksPortal.Migrations
 
                     b.HasIndex("PrintedAt");
 
-                    b.HasIndex("ShopId");
+                    b.HasIndex("TeacherBookshopLinkId");
+
+                    b.HasIndex("TeacherId");
 
                     b.ToTable("PrintLogs");
-                });
-
-            modelBuilder.Entity("PrintingBooksPortal.Models.Shop", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("Address")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<string>("Phone")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("Shops");
-                });
-
-            modelBuilder.Entity("PrintingBooksPortal.Models.ShopBookAssignment", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("AssignedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int>("BookId")
-                        .HasColumnType("int");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<int>("ShopId")
-                        .HasColumnType("int");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("BookId");
-
-                    b.HasIndex("ShopId", "BookId")
-                        .IsUnique();
-
-                    b.ToTable("ShopBookAssignments");
                 });
 
             modelBuilder.Entity("PrintingBooksPortal.Models.SystemSetting", b =>
@@ -441,6 +479,70 @@ namespace PrintingBooksPortal.Migrations
                         .IsUnique();
 
                     b.ToTable("SystemSettings");
+                });
+
+            modelBuilder.Entity("PrintingBooksPortal.Models.Teacher", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Teachers");
+                });
+
+            modelBuilder.Entity("PrintingBooksPortal.Models.TeacherBookshopLink", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("BookshopId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("CopiesPrinted")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("LastResetDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("TeacherId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("UniqueApiKey")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BookshopId");
+
+                    b.HasIndex("UniqueApiKey")
+                        .IsUnique();
+
+                    b.HasIndex("TeacherId", "BookshopId")
+                        .IsUnique();
+
+                    b.ToTable("TeacherBookshopLinks");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
@@ -496,11 +598,12 @@ namespace PrintingBooksPortal.Migrations
 
             modelBuilder.Entity("PrintingBooksPortal.Models.ApplicationUser", b =>
                 {
-                    b.HasOne("PrintingBooksPortal.Models.Shop", "Shop")
-                        .WithMany("Users")
-                        .HasForeignKey("ShopId");
+                    b.HasOne("PrintingBooksPortal.Models.Teacher", "Teacher")
+                        .WithMany()
+                        .HasForeignKey("TeacherId")
+                        .OnDelete(DeleteBehavior.SetNull);
 
-                    b.Navigation("Shop");
+                    b.Navigation("Teacher");
                 });
 
             modelBuilder.Entity("PrintingBooksPortal.Models.Book", b =>
@@ -508,10 +611,38 @@ namespace PrintingBooksPortal.Migrations
                     b.HasOne("PrintingBooksPortal.Models.EducationalBoard", "Board")
                         .WithMany("Books")
                         .HasForeignKey("BoardId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("PrintingBooksPortal.Models.Teacher", "Teacher")
+                        .WithMany("Books")
+                        .HasForeignKey("TeacherId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Board");
+
+                    b.Navigation("Teacher");
+                });
+
+            modelBuilder.Entity("PrintingBooksPortal.Models.EducationalBoard", b =>
+                {
+                    b.HasOne("PrintingBooksPortal.Models.Teacher", "Teacher")
+                        .WithMany("Boards")
+                        .HasForeignKey("TeacherId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Teacher");
+                });
+
+            modelBuilder.Entity("PrintingBooksPortal.Models.Invoice", b =>
+                {
+                    b.HasOne("PrintingBooksPortal.Models.TeacherBookshopLink", "Link")
+                        .WithMany("Invoices")
+                        .HasForeignKey("TeacherBookshopLinkId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Link");
                 });
 
             modelBuilder.Entity("PrintingBooksPortal.Models.PrintLog", b =>
@@ -519,44 +650,54 @@ namespace PrintingBooksPortal.Migrations
                     b.HasOne("PrintingBooksPortal.Models.Book", "Book")
                         .WithMany("PrintLogs")
                         .HasForeignKey("BookId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("PrintingBooksPortal.Models.Shop", "Shop")
+                    b.HasOne("PrintingBooksPortal.Models.TeacherBookshopLink", "TeacherBookshopLink")
                         .WithMany("PrintLogs")
-                        .HasForeignKey("ShopId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .HasForeignKey("TeacherBookshopLinkId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("PrintingBooksPortal.Models.Teacher", "Teacher")
+                        .WithMany("PrintLogs")
+                        .HasForeignKey("TeacherId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Book");
 
-                    b.Navigation("Shop");
+                    b.Navigation("Teacher");
+
+                    b.Navigation("TeacherBookshopLink");
                 });
 
-            modelBuilder.Entity("PrintingBooksPortal.Models.ShopBookAssignment", b =>
+            modelBuilder.Entity("PrintingBooksPortal.Models.TeacherBookshopLink", b =>
                 {
-                    b.HasOne("PrintingBooksPortal.Models.Book", "Book")
-                        .WithMany("Assignments")
-                        .HasForeignKey("BookId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                    b.HasOne("PrintingBooksPortal.Models.Bookshop", "Bookshop")
+                        .WithMany("TeacherLinks")
+                        .HasForeignKey("BookshopId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("PrintingBooksPortal.Models.Shop", "Shop")
-                        .WithMany("Assignments")
-                        .HasForeignKey("ShopId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                    b.HasOne("PrintingBooksPortal.Models.Teacher", "Teacher")
+                        .WithMany("BookshopLinks")
+                        .HasForeignKey("TeacherId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.Navigation("Book");
+                    b.Navigation("Bookshop");
 
-                    b.Navigation("Shop");
+                    b.Navigation("Teacher");
                 });
 
             modelBuilder.Entity("PrintingBooksPortal.Models.Book", b =>
                 {
-                    b.Navigation("Assignments");
-
                     b.Navigation("PrintLogs");
+                });
+
+            modelBuilder.Entity("PrintingBooksPortal.Models.Bookshop", b =>
+                {
+                    b.Navigation("TeacherLinks");
                 });
 
             modelBuilder.Entity("PrintingBooksPortal.Models.EducationalBoard", b =>
@@ -564,13 +705,22 @@ namespace PrintingBooksPortal.Migrations
                     b.Navigation("Books");
                 });
 
-            modelBuilder.Entity("PrintingBooksPortal.Models.Shop", b =>
+            modelBuilder.Entity("PrintingBooksPortal.Models.Teacher", b =>
                 {
-                    b.Navigation("Assignments");
+                    b.Navigation("Boards");
+
+                    b.Navigation("Books");
+
+                    b.Navigation("BookshopLinks");
 
                     b.Navigation("PrintLogs");
+                });
 
-                    b.Navigation("Users");
+            modelBuilder.Entity("PrintingBooksPortal.Models.TeacherBookshopLink", b =>
+                {
+                    b.Navigation("Invoices");
+
+                    b.Navigation("PrintLogs");
                 });
 #pragma warning restore 612, 618
         }

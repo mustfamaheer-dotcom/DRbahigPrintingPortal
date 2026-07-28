@@ -6,7 +6,8 @@ public class PrintLog
 {
     public int Id { get; set; }
 
-    public int ShopId { get; set; }
+    public int TeacherId { get; set; }
+    public int? TeacherBookshopLinkId { get; set; }
     public int BookId { get; set; }
 
     [MaxLength(50)]
@@ -28,6 +29,7 @@ public class PrintLog
 
     public DateTime PrintedAt { get; set; } = DateTime.UtcNow;
 
-    public Shop Shop { get; set; } = null!;
+    public Teacher Teacher { get; set; } = null!;
+    public TeacherBookshopLink? TeacherBookshopLink { get; set; }
     public Book Book { get; set; } = null!;
 }

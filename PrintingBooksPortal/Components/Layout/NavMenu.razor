@@ -11,7 +11,7 @@
         </div>
         <div class="brand-text">
             <span class="brand-title">PrintingBooks</span>
-            <span class="brand-subtitle">Management Portal</span>
+            <span class="brand-subtitle">Multi-Tenant Portal</span>
         </div>
     </div>
 
@@ -68,23 +68,19 @@
 
     private bool IsActive(string href)
     {
-        // Remove leading slash from href for comparison
         var normalizedHref = href.TrimStart('/');
         var normalizedCurrent = currentUri.TrimStart('/');
 
-        // Exact match for home
         if (href == "/" || href == "")
         {
             return normalizedCurrent == "" || normalizedCurrent == "Home";
         }
 
-        // For other pages, check if current path starts with the href
         return normalizedCurrent.StartsWith(normalizedHref, StringComparison.OrdinalIgnoreCase);
     }
 
     private void NavigateToPage(string href)
     {
-        // This will be handled by the browser's default navigation
     }
 
     public void Dispose()
@@ -103,16 +99,20 @@
             new("Dashboard", "/admin/dashboard", SvgIcons.Dashboard),
             new("Boards", "/admin/boards", SvgIcons.Boards),
             new("Books", "/admin/books", SvgIcons.Books),
+            new("Teachers", "/admin/teachers", SvgIcons.Users),
             new("Shops", "/admin/shops", SvgIcons.Shops),
             new("Book Access", "/admin/assignments", SvgIcons.BookAccess),
             new("Users", "/admin/users", SvgIcons.Users),
             new("Analytics", "/admin/analytics", SvgIcons.Analytics),
             new("Settings", "/admin/settings", SvgIcons.Settings),
         ]),
-        new("Shop",
+        new("Teacher",
         [
-            new("My Books", "/shop/mybooks", SvgIcons.Books),
-            new("Print History", "/shop/history", SvgIcons.History),
+            new("Dashboard", "/teacher/dashboard", SvgIcons.Dashboard),
+            new("My Books", "/teacher/mybooks", SvgIcons.Books),
+            new("Bookshops", "/teacher/bookshops", SvgIcons.Shops),
+            new("Invoices", "/teacher/invoices", SvgIcons.History),
+            new("Print History", "/teacher/history", SvgIcons.Analytics),
         ]),
     ];
 

@@ -1,0 +1,142 @@
+@page "/teacher/dashboard"
+@attribute [Authorize(Roles = "Teacher")]
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="py-8">
+    <MudText Typo="Typo.h4" Class="mb-1">Teacher Dashboard</MudText>
+    <MudText Typo="Typo.body2" Class="mb-6">Overview of your books, bookshops, and printing activity</MudText>
+
+    @if (loading)
+    {
+        <div class="d-flex justify-center ma-8">
+            <MudProgressCircular Indeterminate="true" Size="Size.Large" />
+        </div>
+    }
+    else
+    {
+        <MudGrid>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4" Elevation="1">
+                    <MudText Typo="Typo.body2" Class="text-secondary">Total Books</MudText>
+                    <MudText Typo="Typo.h4" Class="mt-2">@stats.TotalBooks</MudText>
+                    <MudIcon Icon="@Icons.Material.Filled.Book" Size="Size.Small" Class="mt-2 text-secondary" />
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4" Elevation="1">
+                    <MudText Typo="Typo.body2" Class="text-secondary">Active Bookshops</MudText>
+                    <MudText Typo="Typo.h4" Class="mt-2">@stats.ActiveBookshops</MudText>
+                    <MudIcon Icon="@Icons.Material.Filled.Store" Size="Size.Small" Class="mt-2 text-secondary" />
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4" Elevation="1">
+                    <MudText Typo="Typo.body2" Class="text-secondary">Copies This Month</MudText>
+                    <MudText Typo="Typo.h4" Class="mt-2">@stats.CopiesThisMonth</MudText>
+                    <MudIcon Icon="@Icons.Material.Filled.Print" Size="Size.Small" Class="mt-2 text-secondary" />
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Class="pa-4" Elevation="1">
+                    <MudText Typo="Typo.body2" Class="text-secondary">Total All Time</MudText>
+                    <MudText Typo="Typo.h4" Class="mt-2">@stats.TotalCopiesAllTime</MudText>
+                    <MudIcon Icon="@Icons.Material.Filled.TrendingUp" Size="Size.Small" Class="mt-2 text-secondary" />
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+
+        <MudGrid Class="mt-4">
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-4" Elevation="1">
+                    <MudText Typo="Typo.h6" Class="mb-4">Quick Actions</MudText>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Class="mb-2"
+                               StartIcon="@Icons.Material.Filled.AddLink"
+                               OnClick="GoToBookshops">
+                        Manage Bookshops
+                    </MudButton>
+                    <MudButton Variant="Variant.Outlined" Color="Color.Secondary" FullWidth="true" Class="mb-2"
+                               StartIcon="@Icons.Material.Filled.Receipt"
+                               OnClick="GoToInvoices">
+                        View Invoices
+                    </MudButton>
+                    <MudButton Variant="Variant.Text" Color="Color.Info" FullWidth="true"
+                               StartIcon="@Icons.Material.Filled.Book"
+                               OnClick="GoToMyBooks">
+                        My Books
+                    </MudButton>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-4" Elevation="1">
+                    <MudText Typo="Typo.h6" Class="mb-4">Recent Activity</MudText>
+                    @if (stats.RecentLogs.Any())
+                    {
+                        <div class="mud-list mud-list-dense">
+                            @foreach (var log in stats.RecentLogs)
+                            {
+                                <div class="mud-list-item mud-list-item-dense">
+                                    <MudText Typo="Typo.body2">Printed "@log.BookTitle" (@log.Copies copies)</MudText>
+                                    <MudText Typo="Typo.caption" Class="text-secondary">@log.ShopName - @log.PrintedAt.ToString("g")</MudText>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.body2" Class="text-secondary">No recent printing activity</MudText>
+                    }
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+    }
+</MudContainer>
+
+@code {
+    private DashboardStats stats = new();
+    private bool loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            stats = await Http.GetFromJsonAsync<DashboardStats>("/api/teacher/dashboard") ?? new DashboardStats();
+        }
+        catch
+        {
+            stats = new DashboardStats
+            {
+                TotalBooks = 0,
+                ActiveBookshops = 0,
+                CopiesThisMonth = 0,
+                TotalCopiesAllTime = 0
+            };
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private void GoToBookshops() => Navigation.NavigateTo("/teacher/bookshops");
+    private void GoToInvoices() => Navigation.NavigateTo("/teacher/invoices");
+    private void GoToMyBooks() => Navigation.NavigateTo("/teacher/mybooks");
+
+    private class DashboardStats
+    {
+        public int TotalBooks { get; set; }
+        public int ActiveBookshops { get; set; }
+        public int CopiesThisMonth { get; set; }
+        public int TotalCopiesAllTime { get; set; }
+        public List<LogEntry> RecentLogs { get; set; } = new();
+    }
+
+    private class LogEntry
+    {
+        public string BookTitle { get; set; } = "";
+        public string ShopName { get; set; } = "";
+        public int Copies { get; set; }
+        public DateTime PrintedAt { get; set; }
+    }
+}

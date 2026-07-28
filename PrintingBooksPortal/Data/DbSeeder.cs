@@ -8,19 +8,17 @@ public static class DbSeeder
 {
     public static async Task SeedAsync(AppDbContext db, UserManager<ApplicationUser> userManager, RoleManager<IdentityRole> roleManager)
     {
-        try
-        {
-            if (!await roleManager.RoleExistsAsync("Admin"))
-                await roleManager.CreateAsync(new IdentityRole("Admin"));
-        }
-        catch { }
+        string[] roles = ["Admin", "Teacher", "BookshopManager"];
 
-        try
+        foreach (var role in roles)
         {
-            if (!await roleManager.RoleExistsAsync("Shop"))
-                await roleManager.CreateAsync(new IdentityRole("Shop"));
+            try
+            {
+                if (!await roleManager.RoleExistsAsync(role))
+                    await roleManager.CreateAsync(new IdentityRole(role));
+            }
+            catch { }
         }
-        catch { }
 
         try
         {
@@ -31,6 +29,7 @@ public static class DbSeeder
                     UserName = "admin@printingbooks.com",
                     Email = "admin@printingbooks.com",
                     FullName = "System Administrator",
+                    Role = UserRole.Admin,
                     EmailConfirmed = true
                 };
                 var result = await userManager.CreateAsync(admin, "Admin@123");

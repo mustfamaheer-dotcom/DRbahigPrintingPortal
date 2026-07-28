@@ -77,7 +77,7 @@
 </div>
 
 @code {
-    private List<Shop>? shops;
+    private List<Bookshop>? shops;
     private List<Book>? books;
     private Dictionary<string, bool> assignedBooks = new();
     private HashSet<int> expandedShops = new();
@@ -90,13 +90,13 @@
 
     private async Task LoadData()
     {
-        shops = await Db.Shops.OrderBy(s => s.Name).ToListAsync<Shop>();
+        shops = await Db.Bookshops.OrderBy(s => s.Name).ToListAsync();
         books = await Db.Books.Include(b => b.Board).OrderBy(b => b.Title).ToListAsync<Book>();
-        var assignments = await Db.ShopBookAssignments.Where(a => a.IsActive).ToListAsync<ShopBookAssignment>();
+        var assignments = await Db.TeacherBookshopLinks.Where(a => a.IsActive).ToListAsync();
 
         assignedBooks = new Dictionary<string, bool>();
         foreach (var a in assignments)
-            assignedBooks[$"{a.ShopId}-{a.BookId}"] = true;
+            assignedBooks[$"{a.BookshopId}-{a.TeacherId}"] = true;
     }
 
     private void ToggleExpand(int shopId)
@@ -116,20 +116,20 @@
 
     private async Task ToggleAssignment(int shopId, int bookId, bool assigned)
     {
-        var existing = await Db.ShopBookAssignments
-            .FirstOrDefaultAsync(a => a.ShopId == shopId && a.BookId == bookId);
+        var existing = await Db.TeacherBookshopLinks
+            .FirstOrDefaultAsync(a => a.BookshopId == shopId && a.TeacherId == bookId);
 
         if (assigned && existing == null)
         {
-            Db.ShopBookAssignments.Add(new ShopBookAssignment
+            Db.TeacherBookshopLinks.Add(new TeacherBookshopLink
             {
-                ShopId = shopId,
-                BookId = bookId
+                BookshopId = shopId,
+                TeacherId = bookId
             });
         }
         else if (!assigned && existing != null)
         {
-            Db.ShopBookAssignments.Remove(existing);
+            Db.TeacherBookshopLinks.Remove(existing);
         }
 
         await Db.SaveChangesAsync();

@@ -176,7 +176,7 @@
 @code {
     private List<UserViewModel>? users;
     private List<string> roles = [];
-    private List<Shop>? shops;
+    private List<Bookshop>? shops;
     private bool showModal;
     private bool editing;
     private string? message;
@@ -200,14 +200,14 @@
 
     private async Task LoadData()
     {
-        shops = await Db.Shops.OrderBy(s => s.Name).ToListAsync();
+        shops = await Db.Bookshops.OrderBy(s => s.Name).ToListAsync();
         roles = (await RoleManager.Roles.Select(r => r.Name).ToListAsync())!;
         await LoadUsers();
     }
 
     private async Task LoadUsers()
     {
-        var appUsers = await UserManager.Users.Include(u => u.Shop).OrderBy(u => u.Email).ToListAsync();
+        var appUsers = await UserManager.Users.Include(u => u.Teacher).OrderBy(u => u.Email).ToListAsync();
         users = [];
         foreach (var u in appUsers)
         {
@@ -218,7 +218,7 @@
                 Email = u.Email ?? "",
                 FullName = u.FullName ?? "",
                 Role = userRoles.FirstOrDefault() ?? "None",
-                ShopName = u.Shop?.Name,
+                ShopName = u.Teacher?.Name,
                 EmailConfirmed = u.EmailConfirmed
             });
         }
@@ -280,12 +280,12 @@
 
             if (editRole == "Shop")
             {
-                user.ShopId = editShopId;
+                user.TeacherId = editShopId;
                 await UserManager.UpdateAsync(user);
             }
             else
             {
-                user.ShopId = null;
+                user.TeacherId = null;
                 await UserManager.UpdateAsync(user);
             }
 
@@ -317,7 +317,7 @@
                 UserName = editEmail,
                 Email = editEmail,
                 FullName = editFullName,
-                ShopId = editRole == "Shop" ? editShopId : null,
+                TeacherId = editRole == "Shop" ? editShopId : null,
                 EmailConfirmed = true
             };
 

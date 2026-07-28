@@ -1,0 +1,120 @@
+@page "/teacher/invoices"
+@attribute [Authorize(Roles = "Teacher")]
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="py-8">
+    <MudText Typo="Typo.h4" Class="mb-1">Billing & Invoices</MudText>
+    <MudText Typo="Typo.body2" Class="mb-6">View invoices generated for your bookshops</MudText>
+
+    @if (loading)
+    {
+        <div class="d-flex justify-center ma-8">
+            <MudProgressCircular Indeterminate="true" Size="Size.Large" />
+        </div>
+    }
+    else if (invoices != null && invoices.Any())
+    {
+        <MudTable Items="invoices" Dense="false" Hover="true" Striped="true" Elevation="1" Class="rounded-lg">
+            <HeaderContent>
+                <MudTh>Bookshop</MudTh>
+                <MudTh>Period</MudTh>
+                <MudTh>Total Copies</MudTh>
+                <MudTh>Total Amount</MudTh>
+                <MudTh>Status</MudTh>
+                <MudTh>Date</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Bookshop">
+                    <MudText Typo="Typo.body2" Class="font-weight-medium">@context.BookshopName</MudText>
+                </MudTd>
+                <MudTd DataLabel="Period">
+                    <MudText Typo="Typo.caption">@context.PeriodStart.ToString("dd/MM/yyyy") - @context.PeriodEnd.ToString("dd/MM/yyyy")</MudText>
+                </MudTd>
+                <MudTd DataLabel="Copies">
+                    <span class="mud-chip mud-chip-filled mud-chip-color-primary mud-chip-size-small">@context.TotalCopies</span>
+                </MudTd>
+                <MudTd DataLabel="Amount">
+                    <MudText Typo="Typo.body2" Class="font-weight-medium">@context.TotalAmount.ToString("N2") @context.Currency</MudText>
+                </MudTd>
+                <MudTd DataLabel="Status">
+                    <span class="mud-chip mud-chip-filled @(context.Status == "Paid" ? "mud-chip-color-success" : "mud-chip-color-warning") mud-chip-size-small">@context.Status</span>
+                </MudTd>
+                <MudTd DataLabel="Created">
+                    <MudText Typo="Typo.caption">@context.CreatedAt.ToString("g")</MudText>
+                </MudTd>
+            </RowTemplate>
+        </MudTable>
+
+        <MudText Typo="Typo.body2" Class="mt-4 text-secondary">
+            Showing page @currentPage of @totalPages (@total invoices)
+        </MudText>
+    }
+    else
+    {
+        <MudPaper Class="pa-8 text-center" Elevation="0">
+            <MudIcon Icon="@Icons.Material.Filled.Receipt" Size="Size.Large" Class="mb-4 text-secondary" />
+            <MudText Typo="Typo.h6" Class="text-secondary">No Invoices Yet</MudText>
+            <MudText Typo="Typo.body2" Class="text-secondary">Invoices are generated when you reset bookshop statistics</MudText>
+        </MudPaper>
+    }
+</MudContainer>
+
+@code {
+    private List<InvoiceView>? invoices;
+    private bool loading = true;
+    private int currentPage = 1;
+    private int total;
+    private int totalPages => Math.Max(1, (int)Math.Ceiling(total / 20.0));
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadInvoices();
+    }
+
+    private async Task LoadInvoices()
+    {
+        loading = true;
+        try
+        {
+            var result = await Http.GetFromJsonAsync<InvoiceResponse>($"/api/teacher/invoices?page={currentPage}&pageSize=20");
+            if (result != null)
+            {
+                invoices = result.items;
+                total = result.total;
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Failed to load invoices: {ex.Message}", Severity.Error);
+            invoices = new List<InvoiceView>();
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private class InvoiceView
+    {
+        public int Id { get; set; }
+        public int TeacherBookshopLinkId { get; set; }
+        public string BookshopName { get; set; } = "";
+        public DateTime PeriodStart { get; set; }
+        public DateTime PeriodEnd { get; set; }
+        public int TotalCopies { get; set; }
+        public string Currency { get; set; } = "EGP";
+        public decimal TotalAmount { get; set; }
+        public string Status { get; set; } = "Pending";
+        public DateTime CreatedAt { get; set; }
+        public DateTime? PaidAt { get; set; }
+    }
+
+    private class InvoiceResponse
+    {
+        public List<InvoiceView> items { get; set; } = new();
+        public int total { get; set; }
+        public int page { get; set; }
+        public int pageSize { get; set; }
+    }
+}

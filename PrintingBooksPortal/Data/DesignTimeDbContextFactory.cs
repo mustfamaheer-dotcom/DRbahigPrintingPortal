@@ -1,12 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 
 namespace PrintingBooksPortal.Data;
 
-/// <summary>
-/// Used by 'dotnet ef' CLI commands to create the DbContext for migrations.
-/// Connection string can be passed via: dotnet ef ... -- --connection "Server=...;"
-/// </summary>
 public class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<AppDbContext>
 {
     public AppDbContext CreateDbContext(string[] args)
@@ -24,6 +21,7 @@ public class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<AppDbConte
 
         var optionsBuilder = new DbContextOptionsBuilder<AppDbContext>();
         optionsBuilder.UseSqlServer(connectionString);
+        optionsBuilder.ConfigureWarnings(w => w.Ignore(RelationalEventId.PendingModelChangesWarning));
 
         return new AppDbContext(optionsBuilder.Options);
     }

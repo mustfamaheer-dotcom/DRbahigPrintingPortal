@@ -1,10 +1,12 @@
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PdfSharpCore;
 using PdfSharpCore.Pdf;
 using PdfSharpCore.Drawing;
 using PrintingBooksPortal.Data;
+using PrintingBooksPortal.Models;
 
 namespace PrintingBooksPortal.Controllers;
 
@@ -14,34 +16,101 @@ namespace PrintingBooksPortal.Controllers;
 public class AdminController : ControllerBase
 {
     private readonly AppDbContext _db;
+    private readonly UserManager<ApplicationUser> _userManager;
 
-    public AdminController(AppDbContext db)
+    public AdminController(AppDbContext db, UserManager<ApplicationUser> userManager)
     {
         _db = db;
+        _userManager = userManager;
     }
 
-    [HttpPost("reset-shop-stats/{shopId:int}")]
-    public async Task<IActionResult> ResetShopStats(int shopId, [FromBody] ResetRequest request)
+    [HttpPost("create-teacher")]
+    public async Task<IActionResult> CreateTeacher([FromBody] CreateTeacherRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Name))
+            return BadRequest(new { success = false, error = "Email and Name are required." });
+
+        var existingUser = await _userManager.FindByEmailAsync(request.Email);
+        if (existingUser != null)
+            return Conflict(new { success = false, error = "A user with this email already exists." });
+
+        var password = string.IsNullOrWhiteSpace(request.Password) ? "Teacher@123" : request.Password;
+
+        var user = new ApplicationUser
+        {
+            UserName = request.Email,
+            Email = request.Email,
+            FullName = request.Name,
+            Role = UserRole.Teacher,
+            EmailConfirmed = true
+        };
+
+        var result = await _userManager.CreateAsync(user, password);
+        if (!result.Succeeded)
+            return BadRequest(new { success = false, errors = result.Errors.Select(e => e.Description) });
+
+        await _userManager.AddToRoleAsync(user, "Teacher");
+
+        var teacher = new Teacher
+        {
+            Name = request.Name
+        };
+        _db.Teachers.Add(teacher);
+        await _db.SaveChangesAsync();
+
+        user.TeacherId = teacher.Id;
+        await _userManager.UpdateAsync(user);
+
+        return Ok(new
+        {
+            success = true,
+            teacherId = teacher.Id,
+            email = request.Email,
+            temporaryPassword = password,
+            message = $"Teacher '{request.Name}' created successfully."
+        });
+    }
+
+    [HttpGet("teachers")]
+    public async Task<IActionResult> GetTeachers()
+    {
+        var teachers = await _db.Teachers
+            .Select(t => new
+            {
+                t.Id,
+                t.Name,
+                t.CreatedAt,
+                BookCount = t.Books.Count,
+                BoardCount = t.Boards.Count,
+                BookshopCount = t.BookshopLinks.Count(l => l.IsActive)
+            })
+            .ToListAsync();
+
+        return Ok(teachers);
+    }
+
+    [HttpPost("reset-shop-stats/{teacherId:int}")]
+    public async Task<IActionResult> ResetTeacherStats(int teacherId, [FromBody] ResetRequest request)
     {
         if (request?.Password != "0000")
             return BadRequest(new { success = false, error = "Wrong password. Stats were NOT reset." });
 
-        var logs = await _db.PrintLogs.Where(l => l.ShopId == shopId).ToListAsync();
+        var logs = await _db.PrintLogs.Where(l => l.TeacherId == teacherId).ToListAsync();
         _db.PrintLogs.RemoveRange(logs);
         await _db.SaveChangesAsync();
 
-        var shop = await _db.Shops.FindAsync(shopId);
-        return Ok(new { success = true, message = $"Statistics reset for '{shop?.Name ?? "shop"}' ({logs.Count} log entries removed)." });
+        var teacher = await _db.Teachers.FindAsync(teacherId);
+        return Ok(new { success = true, message = $"Statistics reset for '{teacher?.Name ?? "teacher"}' ({logs.Count} log entries removed)." });
     }
 
-    [HttpGet("shop-receipt/{shopId:int}")]
-    public async Task<IActionResult> GetShopReceipt(int shopId)
+    [HttpGet("shop-receipt/{teacherId:int}")]
+    public async Task<IActionResult> GetTeacherReceipt(int teacherId)
     {
-        var shop = await _db.Shops.FindAsync(shopId);
-        if (shop == null)
-            return NotFound(new { error = "Shop not found." });
+        var teacher = await _db.Teachers.FindAsync(teacherId);
+        if (teacher == null)
+            return NotFound(new { error = "Teacher not found." });
 
-        var logs = await _db.PrintLogs.Where(l => l.ShopId == shopId).ToListAsync();
+        var logs = await _db.PrintLogs.Where(l => l.TeacherId == teacherId).ToListAsync();
         var totalPrints = logs.Sum(l => l.Copies);
         var perBook = logs.GroupBy(l => l.BookTitle)
                           .Select(g => new { Book = g.Key, Copies = g.Sum(l => l.Copies) })
@@ -67,13 +136,9 @@ public class AdminController : ControllerBase
         gfx.DrawString("Print Receipt", fontHeader, black, new XPoint(40, y));
         y += 28;
 
-        gfx.DrawString($"Shop: {shop.Name}", fontBody, black, new XPoint(40, y));
+        gfx.DrawString($"Teacher: {teacher.Name}", fontBody, black, new XPoint(40, y));
         y += 20;
         gfx.DrawString($"Date: {DateTime.Now:dd/MM/yyyy HH:mm}", fontBody, gray, new XPoint(40, y));
-        y += 20;
-        gfx.DrawString("Phone: " + (shop.Phone ?? "\u2014"), fontBody, gray, new XPoint(40, y));
-        y += 20;
-        gfx.DrawString("Address: " + (shop.Address ?? "\u2014"), fontBody, gray, new XPoint(40, y));
         y += 30;
 
         gfx.DrawLine(new XPen(accent.Color, 2), 40, y, 550, y);
@@ -104,7 +169,7 @@ public class AdminController : ControllerBase
         }
         else
         {
-            gfx.DrawString("No prints recorded for this shop.", fontBody, gray, new XPoint(50, y));
+            gfx.DrawString("No prints recorded for this teacher.", fontBody, gray, new XPoint(50, y));
         }
 
         y = Math.Max(y + 30, 780);
@@ -114,9 +179,16 @@ public class AdminController : ControllerBase
 
         using var ms = new MemoryStream();
         doc.Save(ms, false);
-        var fileName = $"receipt_{shop.Name.Replace(" ", "_")}_{DateTime.Now:yyyyMMdd}.pdf";
+        var fileName = $"receipt_{teacher.Name.Replace(" ", "_")}_{DateTime.Now:yyyyMMdd}.pdf";
         return File(ms.ToArray(), "application/pdf", fileName);
     }
+}
+
+public class CreateTeacherRequest
+{
+    public string Name { get; set; } = "";
+    public string Email { get; set; } = "";
+    public string? Password { get; set; }
 }
 
 public class ResetRequest
