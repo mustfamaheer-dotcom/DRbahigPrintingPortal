@@ -4,6 +4,7 @@
 @inject AppDbContext Db
 @inject ITenantContext Tenant
 @inject HttpClient Http
+@inject ILogger<Bookshops> _logger
 
 <div class="content-area">
     <div class="page-header">
@@ -318,6 +319,7 @@
         }
         catch (Exception ex)
         {
+            _logger.LogError(ex, "Failed to load bookshop links for teacher {TeacherId}", Tenant.TeacherId);
             error = $"Failed to load links: {ex.Message}";
             links = new();
         }
@@ -360,6 +362,7 @@
         }
         catch (Exception ex)
         {
+            _logger.LogError(ex, "Failed to link bookshop for teacher {TeacherId}", Tenant.TeacherId);
             error = $"Failed to link bookshop: {ex.Message}";
         }
     }
@@ -374,7 +377,10 @@
 
     private async Task ToggleLink(LinkView link)
     {
-        var dbLink = await Db.TeacherBookshopLinks.FindAsync(link.Id);
+        if (Tenant.TeacherId == null) return;
+        var dbLink = await Db.TeacherBookshopLinks
+            .Where(l => l.Id == link.Id && l.TeacherId == Tenant.TeacherId.Value)
+            .FirstOrDefaultAsync();
         if (dbLink != null) { dbLink.IsActive = !dbLink.IsActive; await Db.SaveChangesAsync(); await LoadLinks(); }
     }
 

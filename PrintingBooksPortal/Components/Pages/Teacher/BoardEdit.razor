@@ -3,6 +3,7 @@
 @rendermode InteractiveServer
 @inject AppDbContext Db
 @inject ITenantContext Tenant
+@inject ILogger<BoardEdit> _logger
 
 <div class="content-area">
     <div class="page-header">
@@ -188,6 +189,7 @@
         }
         catch (Exception ex)
         {
+            _logger.LogError(ex, "Failed to load boards for teacher {TeacherId}", Tenant.TeacherId);
             error = $"Failed to load boards: {ex.Message}";
             boards = new();
         }
@@ -206,7 +208,9 @@
 
             if (editing)
             {
-                var board = await Db.EducationalBoards.FindAsync(editingId);
+                var board = await Db.EducationalBoards
+                    .Where(b => b.Id == editingId && b.TeacherId == Tenant.TeacherId.Value)
+                    .FirstOrDefaultAsync();
                 if (board != null)
                 {
                     board.Name = editModel.Name;
@@ -232,7 +236,9 @@
         }
         catch (Exception ex)
         {
+            _logger.LogError(ex, "Failed to save board for teacher {TeacherId}", Tenant.TeacherId);
             error = $"Failed to save board: {ex.Message}";
+            StateHasChanged();
         }
     }
 

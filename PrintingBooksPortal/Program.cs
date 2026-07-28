@@ -16,9 +16,9 @@ var isProduction = builder.Environment.IsProduction();
 builder.Services.AddDbContext<AppDbContext>(options =>
 {
     if (isProduction)
-        options.UseSqlServer(connectionString);
+        options.UseSqlServer(connectionString, o => o.CommandTimeout(30));
     else
-        options.UseSqlite(connectionString);
+        options.UseSqlite(connectionString, o => o.CommandTimeout(30));
 });
 
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
