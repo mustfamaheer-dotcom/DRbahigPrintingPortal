@@ -3,6 +3,7 @@
 @rendermode InteractiveServer
 @inject AppDbContext Db
 @inject ITenantContext Tenant
+@inject ILogger<PrintHistory> Logger
 
 <div class="content-area">
     <div class="page-header">
@@ -70,11 +71,15 @@
         try
         {
             logs = await Db.PrintLogs
+                .AsNoTracking()
                 .Where(l => l.TeacherId == Tenant.TeacherId.Value)
                 .OrderByDescending(l => l.PrintedAt)
                 .Take(200)
                 .ToListAsync();
         }
-        catch { }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to load print history");
+        }
     }
 }

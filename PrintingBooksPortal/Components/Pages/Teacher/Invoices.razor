@@ -3,6 +3,7 @@
 @rendermode InteractiveServer
 @inject AppDbContext Db
 @inject ITenantContext Tenant
+@inject ILogger<Invoices> Logger
 
 <div class="content-area">
     <div class="page-header">
@@ -77,6 +78,7 @@
         if (Tenant.TeacherId == null) return;
         var tid = Tenant.TeacherId.Value;
         var query = Db.Invoices
+            .AsNoTracking()
             .Where(i => i.Link.TeacherId == tid)
             .Include(i => i.Link).ThenInclude(l => l.Bookshop)
             .OrderByDescending(i => i.CreatedAt);

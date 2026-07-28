@@ -182,6 +182,7 @@
                 return;
             }
             boards = await Db.EducationalBoards
+                .AsNoTracking()
                 .Where(b => b.TeacherId == Tenant.TeacherId.Value)
                 .Include(b => b.Books)
                 .OrderBy(b => b.Name)

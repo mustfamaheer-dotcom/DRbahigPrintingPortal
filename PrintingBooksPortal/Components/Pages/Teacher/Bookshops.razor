@@ -290,6 +290,7 @@
             var tid = Tenant.TeacherId.Value;
 
             var rawLinks = await Db.TeacherBookshopLinks
+                .AsNoTracking()
                 .Where(l => l.TeacherId == tid)
                 .Include(l => l.Bookshop)
                 .OrderByDescending(l => l.CreatedAt)
@@ -300,6 +301,7 @@
             if (bookshopIds.Any())
             {
                 users = await Db.Users
+                    .AsNoTracking()
                     .Where(u => u.BookshopId != null && bookshopIds.Contains(u.BookshopId.Value))
                     .ToListAsync();
             }
@@ -333,7 +335,7 @@
             if (Tenant.TeacherId == null || string.IsNullOrWhiteSpace(newBookshopName)) return;
             var tid = Tenant.TeacherId.Value;
 
-            var shop = await Db.Bookshops.FirstOrDefaultAsync(b => b.Name == newBookshopName);
+            var shop = await Db.Bookshops.AsNoTracking().FirstOrDefaultAsync(b => b.Name == newBookshopName);
             if (shop == null)
             {
                 shop = new Bookshop { Name = newBookshopName, ContactPerson = newContactPerson, Phone = newPhone };
@@ -341,7 +343,7 @@
                 await Db.SaveChangesAsync();
             }
 
-            var exists = await Db.TeacherBookshopLinks.AnyAsync(l => l.TeacherId == tid && l.BookshopId == shop.Id);
+            var exists = await Db.TeacherBookshopLinks.AsNoTracking().AnyAsync(l => l.TeacherId == tid && l.BookshopId == shop.Id);
             if (exists)
             {
                 error = "This bookshop is already linked.";

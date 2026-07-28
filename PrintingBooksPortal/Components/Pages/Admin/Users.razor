@@ -283,7 +283,7 @@
 
             if (editRole == "Teacher")
             {
-                if (user.TeacherId == null)
+                if (user.TeacherId == null || !await Db.Teachers.AnyAsync(t => t.Id == user.TeacherId))
                 {
                     var teacher = new Teacher { Name = editFullName };
                     Db.Teachers.Add(teacher);

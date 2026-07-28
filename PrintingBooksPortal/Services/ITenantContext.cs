@@ -10,6 +10,7 @@ public interface ITenantContext
     int? TeacherId { get; }
     bool IsAdmin { get; }
     string? UserId { get; }
+    bool IsInitialized { get; }
     Task InitializeAsync();
 }
 
@@ -30,32 +31,13 @@ public class TenantContext : ITenantContext
         _scopeFactory = scopeFactory;
     }
 
-    public int? TeacherId
-    {
-        get
-        {
-            if (!_initialized) Initialize();
-            return _teacherId;
-        }
-    }
+    public int? TeacherId => _teacherId;
 
-    public bool IsAdmin
-    {
-        get
-        {
-            if (!_initialized) Initialize();
-            return _isAdmin;
-        }
-    }
+    public bool IsAdmin => _isAdmin;
 
-    public string? UserId
-    {
-        get
-        {
-            if (!_initialized) Initialize();
-            return _userId;
-        }
-    }
+    public string? UserId => _userId;
+
+    public bool IsInitialized => _initialized;
 
     public async Task InitializeAsync()
     {
@@ -65,9 +47,23 @@ public class TenantContext : ITenantContext
             var state = await _authState.GetAuthenticationStateAsync();
             if (state.User.Identity?.IsAuthenticated == true)
             {
-                InitializeFromPrincipal(state.User);
+                var user = state.User;
+                var tidClaim = user.FindFirst("TeacherId");
+                if (tidClaim != null && int.TryParse(tidClaim.Value, out var tid))
+                    _teacherId = tid;
+                _isAdmin = user.IsInRole("Admin");
+                _userId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
                 if (_teacherId == null)
-                    await TryResolveTeacherIdFromDb(state.User);
+                    _logger.LogWarning("InitializeAsync: TeacherId claim missing for user {UserId}. Attempting DB fallback.", _userId);
+                else
+                    _logger.LogInformation("InitializeAsync: resolved TeacherId {TeacherId} from claims for user {UserId}", _teacherId, _userId);
+
+                if (_teacherId == null)
+                    await TryResolveTeacherIdFromDb(user);
+
+                if (_teacherId == null)
+                    _logger.LogWarning("InitializeAsync: TeacherId could not be resolved from claims or DB for user {UserId}", _userId);
             }
             else
             {
@@ -79,18 +75,6 @@ public class TenantContext : ITenantContext
             _logger.LogError(ex, "InitializeAsync failed to resolve authentication state");
         }
         _initialized = true;
-    }
-
-    public void InitializeFromPrincipal(ClaimsPrincipal user)
-    {
-        _initialized = true;
-        var tidClaim = user.FindFirst("TeacherId");
-        if (tidClaim != null && int.TryParse(tidClaim.Value, out var tid))
-            _teacherId = tid;
-        _isAdmin = user.IsInRole("Admin");
-        _userId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        if (_teacherId == null)
-            _logger.LogWarning("InitializeFromPrincipal: TeacherId claim not found or not parseable for user {UserId}", _userId);
     }
 
     private async Task TryResolveTeacherIdFromDb(ClaimsPrincipal user)
@@ -111,32 +95,14 @@ public class TenantContext : ITenantContext
                 _teacherId = appUser.TeacherId.Value;
                 _logger.LogInformation("Fallback: resolved TeacherId {TeacherId} from DB for user {UserId}", _teacherId, userId);
             }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Fallback DB lookup for TeacherId failed for user {UserId}", _userId);
-        }
-    }
-
-    private void Initialize()
-    {
-        if (_initialized) return;
-        _initialized = true;
-        try
-        {
-            var task = _authState.GetAuthenticationStateAsync();
-            if (task.IsCompleted)
+            else
             {
-                var user = task.Result.User;
-                if (user.Identity?.IsAuthenticated == true)
-                    InitializeFromPrincipal(user);
-                else
-                    _logger.LogWarning("Initialize (sync fallback): user is not authenticated");
+                _logger.LogWarning("Fallback: TeacherId is null in DB for user {UserId}", userId);
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Initialize (sync fallback) failed to resolve authentication state");
+            _logger.LogWarning(ex, "Fallback DB lookup for TeacherId failed");
         }
     }
 }

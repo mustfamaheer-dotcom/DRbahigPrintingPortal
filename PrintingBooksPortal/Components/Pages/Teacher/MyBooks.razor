@@ -6,6 +6,7 @@
 @inject NavigationManager Navigation
 @inject FileStorageService FileStorage
 @inject IWebHostEnvironment Env
+@inject ILogger<MyBooks> Logger
 
 <div class="content-area">
     <div class="page-header">
@@ -218,11 +219,13 @@
         var tid = Tenant.TeacherId.Value;
 
         boards = await Db.EducationalBoards
+            .AsNoTracking()
             .Where(b => b.TeacherId == tid && b.IsActive)
             .OrderBy(b => b.Name)
             .ToListAsync();
 
         var books = await Db.Books
+            .AsNoTracking()
             .Where(b => b.TeacherId == tid)
             .Include(b => b.Board)
             .OrderByDescending(b => b.CreatedAt)

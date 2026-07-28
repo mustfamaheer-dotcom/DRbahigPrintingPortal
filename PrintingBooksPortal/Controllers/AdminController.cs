@@ -89,6 +89,46 @@ public class AdminController : ControllerBase
         return Ok(teachers);
     }
 
+    [HttpPost("fix-teacher-ids")]
+    public async Task<IActionResult> FixTeacherIds()
+    {
+        var teachers = await _userManager.GetUsersInRoleAsync("Teacher");
+        var fixed_count = 0;
+        var skipped = 0;
+        foreach (var user in teachers)
+        {
+            if (user.TeacherId != null)
+            {
+                var teacherExists = await _db.Teachers.AnyAsync(t => t.Id == user.TeacherId);
+                if (!teacherExists)
+                {
+                    var teacher = new Teacher { Name = user.FullName ?? user.Email ?? "Teacher" };
+                    _db.Teachers.Add(teacher);
+                    await _db.SaveChangesAsync();
+                    user.TeacherId = teacher.Id;
+                    await _userManager.UpdateAsync(user);
+                    await _userManager.UpdateSecurityStampAsync(user);
+                    fixed_count++;
+                }
+                else
+                {
+                    skipped++;
+                }
+            }
+            else
+            {
+                var teacher = new Teacher { Name = user.FullName ?? user.Email ?? "Teacher" };
+                _db.Teachers.Add(teacher);
+                await _db.SaveChangesAsync();
+                user.TeacherId = teacher.Id;
+                await _userManager.UpdateAsync(user);
+                await _userManager.UpdateSecurityStampAsync(user);
+                fixed_count++;
+            }
+        }
+        return Ok(new { success = true, message = $"Fixed {fixed_count} teacher(s), skipped {skipped}. Affected users must log out and log back in." });
+    }
+
     [HttpPost("refresh-claims")]
     public async Task<IActionResult> RefreshTeacherClaims()
     {

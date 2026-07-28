@@ -1,5 +1,3 @@
-using System.Security.Claims;
-
 namespace PrintingBooksPortal.Services;
 
 public class TenantContextMiddleware
@@ -15,7 +13,7 @@ public class TenantContextMiddleware
     {
         if (context.User.Identity?.IsAuthenticated == true && tenantContext is TenantContext ctx)
         {
-            ctx.InitializeFromPrincipal(context.User);
+            await ctx.InitializeAsync();
         }
         await _next(context);
     }

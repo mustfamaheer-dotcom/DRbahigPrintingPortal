@@ -37,7 +37,9 @@ bld/
 
 ## Publish outputs
 publish/
+publish_output/
 **/publish/
+**/publish_output/
 
 ## Build artifacts / large binaries
 *.exe
