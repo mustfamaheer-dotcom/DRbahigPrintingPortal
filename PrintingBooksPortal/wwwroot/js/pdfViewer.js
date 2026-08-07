@@ -253,22 +253,19 @@
             callback();
         }
 
-        // Single health check first — avoids 3 sequential fetch failures when agent is offline
-        fetch(healthUrl, { mode: 'cors', cache: 'no-cache' }).then(function (r) {
+        // Single health check via server (avoids Chrome blocking localhost from HTTP pages)
+        fetch('/api/pdf/print-agent/status', { cache: 'no-cache' }).then(function (r) {
             if (!r.ok) throw new Error();
-            // Agent is alive — fetch printers now
-            tryFetch(baseUrl + '/api/print-job/printers').then(function (data) {
-                onPrintersFetched(data);
-            }).catch(function () {
-                // Primary port failed, try alternate port
-                tryFetch(altUrl + '/api/print-job/printers').then(function (data) {
-                    onPrintersFetched(data);
-                }).catch(function () {
-                    setOffline('Agent detected — printers endpoint missing (old version)');
-                });
-            });
+            return r.json();
+        }).then(function (data) {
+            if (data.connected && data.printers && data.printers.length > 0) {
+                onPrintersFetched({ printers: data.printers });
+            } else if (data.connected) {
+                setOffline('Agent detected — printers endpoint missing (old version)');
+            } else {
+                setOffline('Agent not running — double-click the desktop shortcut');
+            }
         }).catch(function () {
-            // Agent is offline — show offline state without console noise
             setOffline('Agent not running — double-click the desktop shortcut');
         });
 
@@ -666,15 +663,6 @@
 
     window.handlePrint = async function (event, bookId) {
         console.log('[Print] Starting print job for book', bookId);
-
-        try {
-            var agentCheck = await fetch('http://127.0.0.1:8080/api/print-job/health', { mode: 'cors', cache: 'no-cache' });
-            if (!agentCheck.ok) throw new Error('Not OK');
-        } catch (e) {
-            console.warn('[Print] Agent not reachable');
-            showAgentRequiredModal();
-            return;
-        }
 
         var modalEl = document.getElementById('printResultModal');
         if (modalEl) {

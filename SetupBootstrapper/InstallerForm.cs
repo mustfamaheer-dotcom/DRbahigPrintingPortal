@@ -644,7 +644,7 @@ reg delete 'HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\DR Bahig Bo
         {
             using var key = Registry.LocalMachine.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Uninstall\DR Bahig Books Portal");
             key.SetValue("DisplayName", APP_NAME + " Print Agent");
-            key.SetValue("DisplayVersion", "1.0.0");
+            key.SetValue("DisplayVersion", "1.1.0");
             key.SetValue("Publisher", "DR Bahig Books");
             key.SetValue("InstallDate", DateTime.Now.ToString("yyyyMMdd"));
             key.SetValue("DisplayIcon", Path.Combine(installDir, "book.ico"));

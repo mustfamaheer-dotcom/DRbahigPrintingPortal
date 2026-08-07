@@ -1,0 +1,27 @@
+[Unit]
+Description=DR. Bahig Books Portal (ASP.NET Core Blazor Server)
+After=network.target mssql-server.service
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/booksportal
+ExecStart=/opt/booksportal/PrintingBooksPortal --urls http://127.0.0.1:5000
+Environment=ASPNETCORE_ENVIRONMENT=Production
+Environment=DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=0
+Environment=DOTNET_CLI_TELEMETRY_OPTOUT=1
+Restart=always
+RestartSec=5
+KillSignal=SIGINT
+TimeoutStopSec=30
+LimitNOFILE=65536
+User=booksportal
+Group=booksportal
+NoNewPrivileges=true
+PrivateTmp=true
+
+# Persist DataProtection keys so login cookies/SignalR auth survive restarts
+ReadWritePaths=/opt/booksportal
+StateDirectory=booksportal
+
+[Install]
+WantedBy=multi-user.target

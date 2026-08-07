@@ -364,6 +364,24 @@ public class SecurePdfController : ControllerBase
         return Ok(new { jobs });
     }
 
+    [HttpPost("print-agent/heartbeat")]
+    [AllowAnonymous]
+    public IActionResult AgentHeartbeat([FromBody] AgentHeartbeatRequest? request)
+    {
+        if (!IsValidAgentApiKey())
+            return Unauthorized(new { error = "Valid API key required." });
+
+        AgentStatusTracker.RecordHeartbeat(request?.Printers ?? new());
+        return Ok(new { success = true });
+    }
+
+    [HttpGet("print-agent/status")]
+    [AllowAnonymous]
+    public IActionResult AgentStatus()
+    {
+        return Ok(AgentStatusTracker.GetStatus());
+    }
+
     [HttpGet("print-agent/debug")]
     [AllowAnonymous]
     public IActionResult DebugPending()
@@ -476,4 +494,47 @@ public static class PendingPrintJobs
 {
     public static System.Collections.Concurrent.ConcurrentDictionary<string, PendingJobInfo> Jobs = new();
     public static readonly TimeSpan Expiry = TimeSpan.FromMinutes(5);
+}
+
+public static class AgentStatusTracker
+{
+    private static DateTime _lastSeen = DateTime.MinValue;
+    private static List<AgentPrinterInfo> _printers = new();
+    private static readonly object _lock = new();
+
+    public static void RecordHeartbeat(List<AgentPrinterInfo> printers)
+    {
+        lock (_lock)
+        {
+            _lastSeen = DateTime.UtcNow;
+            _printers = printers ?? new();
+        }
+    }
+
+    public static bool IsConnected => (DateTime.UtcNow - _lastSeen).TotalSeconds < 15;
+
+    public static object GetStatus()
+    {
+        lock (_lock)
+        {
+            return new
+            {
+                connected = IsConnected,
+                lastSeen = _lastSeen == DateTime.MinValue ? (string?)null : _lastSeen.ToString("O"),
+                printers = _printers
+            };
+        }
+    }
+}
+
+public class AgentPrinterInfo
+{
+    public string Name { get; set; } = "";
+    public string? ConnectionType { get; set; }
+    public bool IsDefault { get; set; }
+}
+
+public class AgentHeartbeatRequest
+{
+    public List<AgentPrinterInfo> Printers { get; set; } = new();
 }

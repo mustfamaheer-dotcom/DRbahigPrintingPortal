@@ -8,6 +8,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>DR_Bahig_Books_Portal_Setup</AssemblyName>
     <ApplicationIcon>..\BookShopPrintAgent\book.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
 
   <ItemGroup>

@@ -36,7 +36,11 @@ builder.Services.ConfigureApplicationCookie(options =>
     options.LogoutPath = "/logout";
     options.AccessDeniedPath = "/access-denied";
     options.Cookie.HttpOnly = true;
-    options.Cookie.SecurePolicy = CookieSecurePolicy.Always;     // Security: HTTPS-only cookies
+    // Security: HTTPS-only cookies by default. Can be relaxed to "SameAsRequest"
+    // for HTTP-only staging (e.g. IP-based deployment before the domain + SSL is attached).
+    var cookieSecurePolicy = builder.Configuration.GetValue<CookieSecurePolicy?>("Security:CookieSecurePolicy")
+                             ?? CookieSecurePolicy.Always;
+    options.Cookie.SecurePolicy = cookieSecurePolicy;
     options.Cookie.SameSite = SameSiteMode.Strict;                // Security: prevent CSRF
     options.Cookie.IsEssential = true;                            // Security: GDPR-compliant auth
     options.ExpireTimeSpan = TimeSpan.FromHours(8);
@@ -83,7 +87,11 @@ else
     app.UseDeveloperExceptionPage();
 }
 
-app.UseHttpsRedirection();  // Security: redirect HTTP → HTTPS
+// Security: redirect HTTP → HTTPS. Skippable for HTTP-only staging
+// (IP-based deployment before the domain + SSL certificate is attached).
+var requireHttps = builder.Configuration.GetValue<bool?>("Security:RequireHttps") ?? true;
+if (requireHttps)
+    app.UseHttpsRedirection();
 app.UseStaticFiles();
 app.UseRouting();
 app.UseAuthentication();

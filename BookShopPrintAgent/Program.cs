@@ -52,7 +52,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.WebHost.ConfigureKestrel(options =>
 {
-    options.Listen(IPAddress.Loopback, 8080);
+    options.ListenLocalhost(8080);
 });
 
 builder.Services.AddCors(options =>
@@ -67,6 +67,19 @@ builder.Services.AddHttpClient<PdfPrintService>();
 builder.Services.AddControllers();
 
 var app = builder.Build();
+
+// Chrome/Edge Private Network Access: a public site calling http://localhost
+// requires the preflight to opt in via Access-Control-Allow-Private-Network.
+// Must run BEFORE UseCors (CORS short-circuits preflights without invoking the next middleware).
+app.Use(async (context, next) =>
+{
+    if (HttpMethods.IsOptions(context.Request.Method) &&
+        context.Request.Headers.ContainsKey("Access-Control-Request-Private-Network"))
+    {
+        context.Response.Headers.Append("Access-Control-Allow-Private-Network", "true");
+    }
+    await next();
+});
 
 app.UseCors();
 app.MapControllers();
@@ -155,6 +168,20 @@ _ = Task.Run(async () =>
         {
             Log($"Polling error: {ex.Message}");
         }
+
+        // Heartbeat: send printer list to server so the website can show agent status
+        try
+        {
+            using var localClient = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+            var printersResponse = await localClient.GetAsync("http://127.0.0.1:8080/api/print-job/printers");
+            if (printersResponse.IsSuccessStatusCode)
+            {
+                var printersJson = await printersResponse.Content.ReadAsStringAsync();
+                using var content = new StringContent(printersJson, System.Text.Encoding.UTF8, "application/json");
+                await client.PostAsync($"{baseUrl}/api/pdf/print-agent/heartbeat", content);
+            }
+        }
+        catch { }
 
         await Task.Delay(3000);
     }
