@@ -8,8 +8,8 @@
     document.addEventListener('keydown', function (e) {
         var ctrl = e.ctrlKey || e.metaKey;
         var key = (e.key || '').toLowerCase();
-        if ((ctrl && (key === 's' || key === 'p')) || e.key === 'F12' || e.keyCode === 123) { e.preventDefault(); e.stopPropagation(); return; }
-        if (ctrl && e.shiftKey && (key === 'i' || key === 'j' || key === 'c')) { e.preventDefault(); e.stopPropagation(); return; }
+        if ((ctrl && (key === 's' || key === 'p' || key === 'u')) || e.key === 'F12' || e.keyCode === 123) { e.preventDefault(); e.stopPropagation(); return; }
+        if (ctrl && e.shiftKey && (key === 'i' || key === 'j' || key === 'c' || key === 'u')) { e.preventDefault(); e.stopPropagation(); return; }
     }, true);
 
     document.addEventListener('dragstart', function (e) {
