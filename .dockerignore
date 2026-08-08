@@ -1,0 +1,16 @@
+.git
+.gitignore
+**/bin
+**/obj
+**/publish
+publish-*/
+PrintingBooksPortal/App_Data
+PrintingBooksPortal/SecurePrints
+PrintingBooksPortal.Tests
+BookShopAgent
+BookShopAgentUI
+BookShopPortalUI
+SetupBootstrapper
+deploy
+*.md
+*.db
