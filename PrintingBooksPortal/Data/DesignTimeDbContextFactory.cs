@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
+using PrintingBooksPortal.Models;
 
 namespace PrintingBooksPortal.Data;
 
@@ -23,8 +24,12 @@ public class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<AppDbConte
         }
 
         var optionsBuilder = new DbContextOptionsBuilder<AppDbContext>();
-        optionsBuilder.UseSqlServer(connectionString);
+        if (connectionString.StartsWith("Data Source=", StringComparison.OrdinalIgnoreCase))
+            optionsBuilder.UseSqlite(connectionString);
+        else
+            optionsBuilder.UseSqlServer(connectionString);
 
-        return new AppDbContext(optionsBuilder.Options);
+        // tenantContext null + multiTenancy disabled → query filters skipped at design time (§3.5)
+        return new AppDbContext(optionsBuilder.Options, tenantContext: null, multiTenancy: new MultiTenancyOptions { Enabled = false });
     }
 }

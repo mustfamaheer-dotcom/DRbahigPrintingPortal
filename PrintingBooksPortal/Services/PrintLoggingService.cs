@@ -15,7 +15,7 @@ public class PrintLoggingService
         _httpContextAccessor = httpContextAccessor;
     }
 
-    public async Task LogPrintAsync(int shopId, int bookId, int copies, string? userId, string? userName)
+    public async Task LogPrintAsync(int tenantId, int shopId, int bookId, int copies, string? userId, string? userName)
     {
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -27,6 +27,7 @@ public class PrintLoggingService
 
         var log = new PrintLog
         {
+            TenantId = tenantId,
             ShopId = shopId,
             BookId = bookId,
             ShopName = shop.Name,

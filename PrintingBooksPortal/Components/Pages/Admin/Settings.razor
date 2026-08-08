@@ -1,5 +1,5 @@
 @page "/admin/settings"
-@attribute [Authorize(Roles = "Admin")]
+@attribute [Authorize(Roles = "Teacher,SystemAdmin")]
 @rendermode InteractiveServer
 @inject ISettingsService SettingsService
 

@@ -8,6 +8,9 @@ public class ShopBookAssignment
     public bool IsActive { get; set; } = true;
     public DateTime AssignedAt { get; set; } = DateTime.UtcNow;
 
+    public int TenantId { get; set; }
+    public Tenant? Tenant { get; set; }
+
     public Shop Shop { get; set; } = null!;
     public Book Book { get; set; } = null!;
 }

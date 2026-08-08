@@ -25,6 +25,9 @@ public class Book
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
+    public int TenantId { get; set; }
+    public Tenant? Tenant { get; set; }
+
     public EducationalBoard Board { get; set; } = null!;
     public ICollection<ShopBookAssignment> Assignments { get; set; } = new List<ShopBookAssignment>();
     public ICollection<PrintLog> PrintLogs { get; set; } = new List<PrintLog>();

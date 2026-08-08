@@ -1,5 +1,5 @@
 @page "/admin/analytics"
-@attribute [Authorize(Roles = "Admin")]
+@attribute [Authorize(Roles = "Teacher,SystemAdmin")]
 @inject AppDbContext Db
 @inject PrintLoggingService PrintLogging
 @inject NavigationManager Navigation

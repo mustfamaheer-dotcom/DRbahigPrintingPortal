@@ -1,10 +1,11 @@
 @page "/admin/shops"
-@attribute [Authorize(Roles = "Admin")]
+@attribute [Authorize(Roles = "Teacher,SystemAdmin")]
 @rendermode InteractiveServer
 @inject AppDbContext Db
 @inject UserManager<ApplicationUser> UserManager
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
+@inject ITenantContext TenantContext
 
 <div class="content-area">
     <div class="page-header">
@@ -280,6 +281,7 @@
                 Email = editModel.Email,
                 FullName = editModel.Name,
                 ShopId = shop.Id,
+                TenantId = TenantContext.TenantId,
                 EmailConfirmed = true
             };
 

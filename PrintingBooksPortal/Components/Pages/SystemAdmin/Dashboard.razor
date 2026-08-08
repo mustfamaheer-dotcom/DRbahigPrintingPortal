@@ -1,0 +1,162 @@
+@page "/sa/dashboard"
+@attribute [Authorize(Roles = "SystemAdmin")]
+@inject SystemAdminService Sa
+
+<div class="content-area dashboard-page">
+    <div class="page-header">
+        <div>
+            <h1>Platform Dashboard</h1>
+            <p class="page-subtitle">System-wide overview across all tenants</p>
+        </div>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <div class="col-md-3 col-6">
+            <div class="stat-card stat-card-primary">
+                <div class="stat-card-bg"></div>
+                <div class="stat-card-inner">
+                    <div class="stat-icon">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                    </div>
+                    <div class="stat-info">
+                        <div class="stat-label">Tenants</div>
+                        <div class="stat-value">@(summary?.totals?.tenants ?? 0)</div>
+                        <div class="stat-sub">@(summary?.totals?.activeTenants ?? 0) active</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 col-6">
+            <div class="stat-card stat-card-success">
+                <div class="stat-card-bg"></div>
+                <div class="stat-card-inner">
+                    <div class="stat-icon">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                    </div>
+                    <div class="stat-info">
+                        <div class="stat-label">Shops</div>
+                        <div class="stat-value">@(summary?.totals?.shops ?? 0)</div>
+                        <div class="stat-sub">across all tenants</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 col-6">
+            <div class="stat-card stat-card-purple">
+                <div class="stat-card-bg"></div>
+                <div class="stat-card-inner">
+                    <div class="stat-icon">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+                    </div>
+                    <div class="stat-info">
+                        <div class="stat-label">Books</div>
+                        <div class="stat-value">@(summary?.totals?.books ?? 0)</div>
+                        <div class="stat-sub">@(summary?.totals?.boards ?? 0) boards</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 col-6">
+            <div class="stat-card stat-card-warning">
+                <div class="stat-card-bg"></div>
+                <div class="stat-card-inner">
+                    <div class="stat-icon">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+                    </div>
+                    <div class="stat-info">
+                        <div class="stat-label">Total Prints</div>
+                        <div class="stat-value">@(summary?.totals?.prints ?? 0)</div>
+                        <div class="stat-sub">all time</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-12">
+            <div class="content-card">
+                <div class="card-header d-flex align-items-center justify-content-between">
+                    <h5>Tenant Snapshot</h5>
+                    <a href="/sa/teachers" class="btn btn-sm btn-header-link">All Teachers</a>
+                </div>
+                <div class="card-body">
+                    @if (perTenant == null)
+                    {
+                        <div class="loading-placeholder">Loading...</div>
+                    }
+                    else if (!perTenant.Any())
+                    {
+                        <div class="empty-state"><p>No tenants yet</p></div>
+                    }
+                    else
+                    {
+                        var maxPrints = perTenant.Max(t => t.prints);
+                        var totalPrints = perTenant.Sum(t => t.prints);
+                        <div class="row g-3">
+                            @foreach (var t in perTenant.Take(6).OrderByDescending(t => t.prints))
+                            {
+                                var pct = maxPrints <= 0 ? 0 : (int)((double)t.prints / maxPrints * 100);
+                                <div class="col-md-6 col-xl-4">
+                                    <div class="tenant-mini-card">
+                                        <div class="d-flex align-items-center gap-2 mb-1">
+                                            <span class="avatar-initials avatar-sm" style="background: hsl(@HFor(t.tenantName) 62% 46%);">@Initials(t.tenantName)</span>
+                                            <span class="fw-semibold tenant-name">@t.tenantName</span>
+                                        </div>
+                                        <div class="tenant-meta">
+                                            <span class="usage-pill"><span class="usage-dot usage-dot-primary"></span>@t.shops shops</span>
+                                            <span class="usage-pill"><span class="usage-dot usage-dot-warning"></span>@t.prints prints</span>
+                                            @if (!t.isActive)
+                                            {
+                                                <span class="status-badge status-inactive"><span class="status-dot"></span>Inactive</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="status-badge status-active"><span class="status-dot"></span>Active</span>
+                                            }
+                                        </div>
+                                        <div class="progress-track mt-2"><div class="progress-fill" style="width: @(pct)%;"></div></div>
+                                        <div class="small text-muted mt-1">
+                                            @(totalPrints <= 0 ? "0" : (int)((double)t.prints / totalPrints * 100))% of platform prints
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private PlatformSummary? summary;
+    private List<PlatformTenantRow>? perTenant => summary?.perTenant;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            summary = await Sa.GetPlatformSummaryAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"SystemAdmin analytics load failed: {ex.Message}");
+        }
+    }
+
+    private static string Initials(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "?";
+        var words = name.Split([' ', '-', '_'], StringSplitOptions.RemoveEmptyEntries);
+        return words.Length > 1 ? $"{words[0][0]}{words[1][0]}".ToUpper() : words[0][..1].ToUpper();
+    }
+
+    private static int HFor(string text)
+    {
+        var sum = 0;
+        foreach (var c in text) sum += c;
+        return sum % 360;
+    }
+}

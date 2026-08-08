@@ -7,13 +7,20 @@ namespace PrintingBooksPortal.Services;
 public class SettingsService : ISettingsService
 {
     private readonly AppDbContext _db;
+    private readonly ITenantContext _tenant;
 
-    private const string DefaultWatermarkText = "LICENSED TO: {shopName}\nUSER: {userName}\nDATE: {date}\nDO NOT DISTRIBUTE";
+    private const string DefaultWatermarkText =
+        "LICENSED TO: {tenantName} / {shopName}\nUSER: {userName}\nDATE: {date}\nDO NOT DISTRIBUTE";
 
-    public SettingsService(AppDbContext db)
+    public string DefaultWatermark => DefaultWatermarkText;
+
+    public SettingsService(AppDbContext db, ITenantContext tenant)
     {
         _db = db;
+        _tenant = tenant;
     }
+
+    private int TenantId => _tenant.TenantId;
 
     public async Task<bool> IsWatermarkEnabledAsync()
     {
@@ -70,6 +77,7 @@ public class SettingsService : ISettingsService
             {
                 setting = new SystemSetting
                 {
+                    TenantId = TenantId,
                     Key = SystemSettingKeys.WatermarkText,
                     ValueString = text
                 };
@@ -97,7 +105,7 @@ public class SettingsService : ISettingsService
 
             if (setting == null)
             {
-                setting = new SystemSetting { Key = key, ValueBool = defaultValue };
+                setting = new SystemSetting { TenantId = TenantId, Key = key, ValueBool = defaultValue };
                 _db.SystemSettings.Add(setting);
                 await _db.SaveChangesAsync();
             }
@@ -109,7 +117,7 @@ public class SettingsService : ISettingsService
             await EnsureTableCreatedAsync();
             try
             {
-                var setting = new SystemSetting { Key = key, ValueBool = defaultValue };
+                var setting = new SystemSetting { TenantId = TenantId, Key = key, ValueBool = defaultValue };
                 _db.SystemSettings.Add(setting);
                 await _db.SaveChangesAsync();
             }
@@ -130,7 +138,7 @@ public class SettingsService : ISettingsService
 
             if (setting == null)
             {
-                setting = new SystemSetting { Key = key, ValueBool = value };
+                setting = new SystemSetting { TenantId = TenantId, Key = key, ValueBool = value };
                 _db.SystemSettings.Add(setting);
             }
             else
@@ -145,7 +153,7 @@ public class SettingsService : ISettingsService
             await EnsureTableCreatedAsync();
             try
             {
-                var setting = new SystemSetting { Key = key, ValueBool = value };
+                var setting = new SystemSetting { TenantId = TenantId, Key = key, ValueBool = value };
                 _db.SystemSettings.Add(setting);
                 await _db.SaveChangesAsync();
             }
@@ -177,12 +185,14 @@ public class SettingsService : ISettingsService
             // Check if table already exists
             await _db.SystemSettings.AnyAsync();
 
-            // Table exists — ensure the ValueString column is present (incomplete migration)
+            // Table exists — ensure the required columns are present (incomplete migration)
             if (_db.Database.IsSqlServer())
             {
                 await _db.Database.ExecuteSqlRawAsync(@"
 IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('SystemSettings') AND name = 'ValueString')
-    ALTER TABLE [SystemSettings] ADD [ValueString] nvarchar(2000) NULL");
+    ALTER TABLE [SystemSettings] ADD [ValueString] nvarchar(2000) NULL;
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('SystemSettings') AND name = 'TenantId')
+    ALTER TABLE [SystemSettings] ADD [TenantId] int NOT NULL DEFAULT 1;");
             }
             return;
         }
@@ -202,9 +212,10 @@ BEGIN
         [Id] int IDENTITY(1,1) NOT NULL PRIMARY KEY,
         [Key] nvarchar(100) NOT NULL,
         [ValueBool] bit NOT NULL DEFAULT 1,
-        [ValueString] nvarchar(2000) NULL
+        [ValueString] nvarchar(2000) NULL,
+        [TenantId] int NOT NULL DEFAULT 1
     );
-    CREATE UNIQUE INDEX [IX_SystemSettings_Key] ON [SystemSettings] ([Key]);
+    CREATE UNIQUE INDEX [IX_SystemSettings_TenantId_Key] ON [SystemSettings] ([TenantId], [Key]);
 END");
             }
             else
@@ -214,9 +225,10 @@ CREATE TABLE IF NOT EXISTS [SystemSettings] (
     [Id] INTEGER NOT NULL CONSTRAINT [PK_SystemSettings] PRIMARY KEY AUTOINCREMENT,
     [Key] TEXT NOT NULL,
     [ValueBool] INTEGER NOT NULL DEFAULT 1,
-    [ValueString] TEXT NULL
+    [ValueString] TEXT NULL,
+    [TenantId] INTEGER NOT NULL DEFAULT 1
 );
-CREATE UNIQUE INDEX IF NOT EXISTS [IX_SystemSettings_Key] ON [SystemSettings] ([Key]);");
+CREATE UNIQUE INDEX IF NOT EXISTS [IX_SystemSettings_TenantId_Key] ON [SystemSettings] ([TenantId], [Key]);");
             }
         }
         catch

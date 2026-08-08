@@ -1,0 +1,429 @@
+@page "/sa/teachers"
+@attribute [Authorize(Roles = "SystemAdmin")]
+@inject SystemAdminService Sa
+@inject NavigationManager Navigation
+
+<div class="content-area">
+    <div class="page-header">
+        <div>
+            <h1>Teachers</h1>
+            <p class="page-subtitle">Manage tenant administrator accounts and their tenants</p>
+        </div>
+        <div class="page-header-actions">
+            <button class="btn btn-primary" @onclick="ShowCreate">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                New Teacher
+            </button>
+        </div>
+    </div>
+
+    @if (errorMessage != null)
+    {
+        <div class="alert alert-modern alert-danger">@errorMessage</div>
+    }
+
+    @if (teachers != null && teachers.Any())
+    {
+        <div class="row g-3 mb-4">
+            <div class="col-md-3 col-6">
+                <div class="stat-card stat-card-primary stat-card-lg">
+                    <div class="stat-card-bg"></div>
+                    <div class="stat-card-inner">
+                        <div class="stat-info">
+                            <div class="stat-label">Teachers</div>
+                            <div class="stat-value">@teachers.Count</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 col-6">
+                <div class="stat-card stat-card-success stat-card-lg">
+                    <div class="stat-card-bg"></div>
+                    <div class="stat-card-inner">
+                        <div class="stat-info">
+                            <div class="stat-label">Active Tenants</div>
+                            <div class="stat-value">@teachers.Count(t => t.isActive)</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 col-6">
+                <div class="stat-card stat-card-purple stat-card-lg">
+                    <div class="stat-card-bg"></div>
+                    <div class="stat-card-inner">
+                        <div class="stat-info">
+                            <div class="stat-label">Total Prints</div>
+                            <div class="stat-value">@teachers.Sum(t => t.stats.prints)</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3 col-6">
+                <div class="stat-card stat-card-warning stat-card-lg">
+                    <div class="stat-card-bg"></div>
+                    <div class="stat-card-inner">
+                        <div class="stat-info">
+                            <div class="stat-label">Books</div>
+                            <div class="stat-value">@teachers.Sum(t => t.stats.books)</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    <div class="content-card">
+        <div class="card-header pb-3">
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+                <div class="toolbar-left">
+                    <div class="search-input">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        <input class="form-control form-control-modern" placeholder="Search by name or email..." @bind="search" @bind:event="oninput" @bind:after="ApplyFilter" />
+                    </div>
+                </div>
+                <div class="filter-chips">
+                    <button class="filter-chip @(statusFilter == null ? "active" : "")" @onclick="() => SetFilter(null)">All</button>
+                    <button class="filter-chip @(statusFilter == true ? "active" : "")" @onclick="() => SetFilter(true)">Active</button>
+                    <button class="filter-chip @(statusFilter == false ? "active" : "")" @onclick="() => SetFilter(false)">Inactive</button>
+                </div>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            @if (filtered == null)
+            {
+                <div class="loading-placeholder">Loading...</div>
+            }
+            else if (!filtered.Any())
+            {
+                <div class="empty-state">
+                    <div class="empty-icon">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--gray-300)" stroke-width="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                    </div>
+                    <p>@(string.IsNullOrWhiteSpace(search) ? "No teachers yet. Create the first one." : "No teachers match your search.")</p>
+                </div>
+            }
+            else
+            {
+                <div class="table-container">
+                    <table class="table table-modern">
+                        <thead>
+                            <tr>
+                                <th>Teacher</th>
+                                <th>Contact</th>
+                                <th>Plan</th>
+                                <th>Usage</th>
+                                <th>Prints</th>
+                                <th>Status</th>
+                                <th class="text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @{
+                                var hue = 0;
+                            }
+                            @foreach (var t in filtered)
+                            {
+                                var rowHue = hue;
+                                hue = (hue + 47) % 360;
+                                <tr>
+                                    <td>
+                                        <div class="d-flex align-items-center gap-2">
+                                            <span class="avatar-initials" style="background: hsl(@rowHue 62% 46%);">@Initials(t.name)</span>
+                                            <div>
+                                                <div class="fw-semibold">@t.name</div>
+                                                <div class="small text-muted">@(t.ownerName ?? "—")</div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div>@t.contactEmail</div>
+                                        <div class="small text-muted">@t.phone</div>
+                                    </td>
+                                    <td>
+                                        <span class="plan-badge plan-@(PlanClass(t.plan))">@(t.plan ?? "Standard")</span>
+                                    </td>
+                                    <td>
+                                        <div class="usage-pills">
+                                            <span class="usage-pill"><span class="usage-dot usage-dot-primary"></span>@t.stats.shops shops</span>
+                                            <span class="usage-pill"><span class="usage-dot usage-dot-purple"></span>@t.stats.books books</span>
+                                        </div>
+                                    </td>
+                                    <td><span class="count-badge count-badge-primary">@t.stats.prints</span></td>
+                                    <td>
+                                        <span class="status-badge @(t.isActive ? "status-active" : "status-inactive")">
+                                            <span class="status-dot"></span>
+                                            @(t.isActive ? "Active" : "Inactive")
+                                        </span>
+                                    </td>
+                                    <td class="text-end">
+                                        <div class="action-btns">
+                                            <button class="btn-icon btn-icon-edit" title="Manage" @onclick="() => NavigateTo(t.id)">
+                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                                            </button>
+                                            <button class="btn-icon @(t.isActive ? "btn-icon-danger" : "btn-icon-activate")" title="@(t.isActive ? "Deactivate" : "Activate")" @onclick="() => ToggleActive(t.id, !t.isActive)">
+                                                @if (t.isActive)
+                                                {
+                                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+                                                }
+                                                else
+                                                {
+                                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="5 3.5 20 12 5 20.5 5 3.5"/></svg>
+                                                }
+                                            </button>
+                                            <button class="btn-icon btn-icon-danger" title="Delete" @onclick="() => { pendingDelete = t.id; }">
+                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@if (showCreate)
+{
+    <div class="modal-overlay show" @onclick="CloseCreate">
+        <div class="modal-container" @onclick:stopPropagation>
+            <div class="modal-header">
+                <h5 class="modal-title">Create Teacher &amp; Tenant</h5>
+                <button type="button" class="modal-close" @onclick="CloseCreate">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                @if (createError != null)
+                {
+                    <div class="alert alert-modern alert-danger">@createError</div>
+                }
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Tenant / School Name *</label>
+                        <input class="form-control form-control-modern" @bind="newTeacher.Name" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Owner Name</label>
+                        <input class="form-control form-control-modern" @bind="newTeacher.OwnerName" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Contact Email (login) *</label>
+                        <input type="email" class="form-control form-control-modern" @bind="newTeacher.ContactEmail" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Phone</label>
+                        <input class="form-control form-control-modern" @bind="newTeacher.Phone" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Password *</label>
+                        <input type="password" class="form-control form-control-modern" @bind="newTeacher.Password" />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Plan</label>
+                        <select class="form-select form-control-modern" @bind="newTeacher.Plan">
+                            <option value="">Standard</option>
+                            <option value="Pro">Pro</option>
+                            <option value="Enterprise">Enterprise</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-outline-secondary" @onclick="CloseCreate">Cancel</button>
+                <button class="btn btn-primary" @onclick="CreateTeacher" disabled="@(busy)">@(busy ? "Creating..." : "Create Teacher")</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (pendingDelete != null)
+{
+    var pending = teachers?.FirstOrDefault(t => t.id == pendingDelete);
+    <div class="modal-overlay show" @onclick="() => pendingDelete = null">
+        <div class="modal-container modal-sm" @onclick:stopPropagation>
+            <div class="modal-header">
+                <h5 class="modal-title">Delete Teacher</h5>
+                <button type="button" class="modal-close" @onclick="() => pendingDelete = null">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-1">Delete tenant <strong>@(pending?.name ?? "?")</strong> and its owner account?</p>
+                <p class="text-muted small mb-0">Only possible if the tenant has no shops, books or print logs.</p>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-outline-secondary" @onclick="() => pendingDelete = null">Cancel</button>
+                <button class="btn btn-danger" @onclick="DeleteTeacher" disabled="@(busy)">@(busy ? "Deleting..." : "Delete")</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<TeacherRow>? teachers;
+    private List<TeacherRow>? filtered;
+    private bool showCreate;
+    private bool busy;
+    private string? errorMessage;
+    private string? createError;
+    private string search = "";
+    private bool? statusFilter;
+    private int? pendingDelete;
+
+    private NewTeacherModel newTeacher = new();
+
+    private class NewTeacherModel
+    {
+        public string Name { get; set; } = "";
+        public string? OwnerName { get; set; }
+        public string ContactEmail { get; set; } = "";
+        public string? Phone { get; set; }
+        public string Password { get; set; } = "";
+        public string? Plan { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load()
+    {
+        errorMessage = null;
+        try
+        {
+            teachers = await Sa.ListTeachersAsync();
+            ApplyFilter();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Could not load teachers: {ex.Message}";
+        }
+    }
+
+    private void SetFilter(bool? value)
+    {
+        statusFilter = value;
+        ApplyFilter();
+    }
+
+    private void ApplyFilter()
+    {
+        if (teachers == null)
+        {
+            filtered = null;
+            return;
+        }
+        var q = search?.Trim();
+        filtered = teachers.Where(t =>
+            (string.IsNullOrWhiteSpace(q)
+                || (t.name?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
+                || (t.ownerName?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
+                || (t.contactEmail?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false)
+                || (t.phone?.Contains(q, StringComparison.OrdinalIgnoreCase) ?? false))
+            && (statusFilter == null || t.isActive == statusFilter)
+        ).ToList();
+    }
+
+    private void ShowCreate()
+    {
+        showCreate = true;
+        createError = null;
+        newTeacher = new NewTeacherModel();
+    }
+
+    private void CloseCreate()
+    {
+        showCreate = false;
+        createError = null;
+        newTeacher = new NewTeacherModel();
+    }
+
+    private async Task CreateTeacher()
+    {
+        busy = true;
+        createError = null;
+        try
+        {
+            var (_, error) = await Sa.CreateTeacherAsync(new CreateTeacherData
+            {
+                Name = newTeacher.Name,
+                OwnerName = newTeacher.OwnerName,
+                ContactEmail = newTeacher.ContactEmail,
+                Phone = newTeacher.Phone,
+                Password = newTeacher.Password,
+                Plan = newTeacher.Plan
+            });
+
+            if (error != null)
+            {
+                createError = error;
+                return;
+            }
+            CloseCreate();
+            await Load();
+        }
+        catch (Exception ex)
+        {
+            createError = $"Request failed: {ex.Message}";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task ToggleActive(int id, bool activate)
+    {
+        try
+        {
+            var (_, error) = await Sa.SetTeacherActiveAsync(id, activate);
+            if (error != null)
+                errorMessage = error;
+            await Load();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Action failed: {ex.GetBaseException().Message}";
+        }
+    }
+
+    private async Task DeleteTeacher()
+    {
+        if (pendingDelete == null) return;
+        var id = pendingDelete.Value;
+        pendingDelete = null;
+        busy = true;
+        try
+        {
+            var (ok, error) = await Sa.DeleteTeacherAsync(id);
+            if (!ok)
+                errorMessage = error;
+            await Load();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Delete failed: {ex.GetBaseException().Message}";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private void NavigateTo(int id) => Navigation.NavigateTo($"/sa/teachers/{id}");
+
+    private static string Initials(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "?";
+        var words = name.Split([' ', '-', '_'], StringSplitOptions.RemoveEmptyEntries);
+        return words.Length > 1 ? $"{words[0][0]}{words[1][0]}".ToUpper() : words[0][..1].ToUpper();
+    }
+
+    private static string PlanClass(string? plan) => (plan ?? "").ToLower() switch
+    {
+        "pro" => "plan-pro",
+        "enterprise" => "plan-enterprise",
+        _ => "plan-standard"
+    };
+}

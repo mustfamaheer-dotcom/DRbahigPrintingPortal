@@ -1,10 +1,11 @@
 @page "/admin/users"
-@attribute [Authorize(Roles = "Admin")]
+@attribute [Authorize(Roles = "Admin,SystemAdmin")]
 @rendermode InteractiveServer
 @inject AppDbContext Db
 @inject UserManager<ApplicationUser> UserManager
 @inject RoleManager<IdentityRole> RoleManager
 @inject NavigationManager Navigation
+@inject ITenantContext TenantContext
 
 <div class="content-area">
     <div class="page-header">
@@ -318,6 +319,7 @@
                 Email = editEmail,
                 FullName = editFullName,
                 ShopId = editRole == "Shop" ? editShopId : null,
+                TenantId = TenantContext.TenantId,
                 EmailConfirmed = true
             };
 

@@ -3,6 +3,8 @@
 @inject SignInManager<ApplicationUser> SignInManager
 @inject UserManager<ApplicationUser> UserManager
 @inject IJSRuntime JSRuntime
+@inject AuthenticationStateProvider AuthState
+@inject ITenantContext TenantContext
 @implements IAsyncDisposable
 
 <div class="app-layout">
@@ -40,7 +42,7 @@
                                     </div>
                                     <div class="user-info d-none d-lg-block">
                                         <span class="user-name">@context.User.Identity?.Name</span>
-                                        <span class="user-role">@(context.User.IsInRole("Admin") ? "Administrator" : "Shop")</span>
+                                        <span class="user-role">@GetRoleLabel(context.User)</span>
                                     </div>
                                     <svg class="user-chevron d-none d-lg-block" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
                                 </button>
@@ -49,7 +51,7 @@
                                         <div class="dropdown-avatar">@GetInitials(context.User.Identity?.Name)</div>
                                         <div>
                                             <div class="dropdown-name">@context.User.Identity?.Name</div>
-                                            <div class="dropdown-role">@(context.User.IsInRole("Admin") ? "Administrator" : "Shop")</div>
+                                            <div class="dropdown-role">@GetRoleLabel(context.User)</div>
                                         </div>
                                     </div>
                                     <div class="dropdown-divider"></div>
@@ -106,6 +108,15 @@
         showTopBar = showSidebar;
     }
 
+    protected override async Task OnInitializedAsync()
+    {
+        // Circuits have no HttpContext — TenantContext falls back to the ambient
+        // tenant id which is seeded here from the authenticated principal every
+        // time a page renders inside the circuit (§14.11).
+        var state = await AuthState.GetAuthenticationStateAsync();
+        TenantContext.Initialize(state.User);
+    }
+
     private async Task ToggleUserMenu()
     {
         if (layoutModule is not null)
@@ -128,6 +139,15 @@
         if (string.IsNullOrEmpty(path)) return "Home";
         var segments = path.Split('/');
         return string.Join(" / ", segments.Select(s => char.ToUpper(s[0]) + s.Substring(1)));
+    }
+
+    private static string GetRoleLabel(System.Security.Claims.ClaimsPrincipal user)
+    {
+        if (user.IsInRole("SystemAdmin")) return "System Administrator";
+        if (user.IsInRole("Teacher")) return "Teacher";
+        if (user.IsInRole("Admin")) return "Administrator";
+        if (user.IsInRole("Shop")) return "Shop";
+        return "Guest";
     }
 
     private static string GetInitials(string? name)

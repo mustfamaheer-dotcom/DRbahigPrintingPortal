@@ -15,24 +15,12 @@
 </head>
 
 <body>
-    <Routes />
+    <Routes @rendermode="InteractiveServer" />
     <script src="@Assets["_framework/blazor.web.js"]"></script>
     <script src="@Assets["lib/bootstrap/dist/js/bootstrap.bundle.min.js"]"></script>
     <script src="@Assets["js/pdfViewer.js"]"></script>
-	<script>
-		(function() {
-			function block(e) { e.preventDefault(); e.stopPropagation(); return false; }
-			document.addEventListener('contextmenu', block, true);
-			window.addEventListener('contextmenu', block, true);
-
-			document.addEventListener('keydown', function(e) {
-				var ctrl = e.ctrlKey || e.metaKey;
-				var key = (e.key || '').toLowerCase();
-				if ((ctrl && (key === 's' || key === 'p' || key === 'u')) || e.key === 'F12' || e.keyCode === 123) { block(e); return; }
-				if (ctrl && e.shiftKey && (key === 'i' || key === 'j' || key === 'c' || key === 'u')) { block(e); return; }
-			}, true);
-		})();
-	</script>
+    <script src="@Assets["js/antiTamper.js"]"></script>
+    <script src="@Assets["js/copy.js"]"></script>
 </body>
 
 </html>

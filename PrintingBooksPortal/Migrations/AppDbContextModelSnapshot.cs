@@ -183,6 +183,9 @@ namespace PrintingBooksPortal.Migrations
                     b.Property<DateTimeOffset?>("LockoutEnd")
                         .HasColumnType("datetimeoffset");
 
+                    b.Property<bool>("MustChangePassword")
+                        .HasColumnType("bit");
+
                     b.Property<string>("NormalizedEmail")
                         .HasMaxLength(256)
                         .HasColumnType("nvarchar(256)");
@@ -206,6 +209,9 @@ namespace PrintingBooksPortal.Migrations
                     b.Property<int?>("ShopId")
                         .HasColumnType("int");
 
+                    b.Property<int?>("TenantId")
+                        .HasColumnType("int");
+
                     b.Property<bool>("TwoFactorEnabled")
                         .HasColumnType("bit");
 
@@ -224,6 +230,8 @@ namespace PrintingBooksPortal.Migrations
                         .HasFilter("[NormalizedUserName] IS NOT NULL");
 
                     b.HasIndex("ShopId");
+
+                    b.HasIndex("TenantId");
 
                     b.ToTable("AspNetUsers", (string)null);
                 });
@@ -260,6 +268,9 @@ namespace PrintingBooksPortal.Migrations
                     b.Property<int>("PageCount")
                         .HasColumnType("int");
 
+                    b.Property<int>("TenantId")
+                        .HasColumnType("int");
+
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasMaxLength(300)
@@ -268,6 +279,8 @@ namespace PrintingBooksPortal.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("BoardId");
+
+                    b.HasIndex("TenantId");
 
                     b.ToTable("Books");
                 });
@@ -295,7 +308,12 @@ namespace PrintingBooksPortal.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<int>("TenantId")
+                        .HasColumnType("int");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("TenantId");
 
                     b.ToTable("EducationalBoards");
                 });
@@ -342,6 +360,9 @@ namespace PrintingBooksPortal.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
+                    b.Property<int>("TenantId")
+                        .HasColumnType("int");
+
                     b.HasKey("Id");
 
                     b.HasIndex("BookId");
@@ -349,6 +370,8 @@ namespace PrintingBooksPortal.Migrations
                     b.HasIndex("PrintedAt");
 
                     b.HasIndex("ShopId");
+
+                    b.HasIndex("TenantId");
 
                     b.ToTable("PrintLogs");
                 });
@@ -380,7 +403,12 @@ namespace PrintingBooksPortal.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
+                    b.Property<int>("TenantId")
+                        .HasColumnType("int");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("TenantId");
 
                     b.ToTable("Shops");
                 });
@@ -405,9 +433,14 @@ namespace PrintingBooksPortal.Migrations
                     b.Property<int>("ShopId")
                         .HasColumnType("int");
 
+                    b.Property<int>("TenantId")
+                        .HasColumnType("int");
+
                     b.HasKey("Id");
 
                     b.HasIndex("BookId");
+
+                    b.HasIndex("TenantId");
 
                     b.HasIndex("ShopId", "BookId")
                         .IsUnique();
@@ -428,6 +461,9 @@ namespace PrintingBooksPortal.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<int>("TenantId")
+                        .HasColumnType("int");
+
                     b.Property<bool>("ValueBool")
                         .HasColumnType("bit");
 
@@ -437,10 +473,95 @@ namespace PrintingBooksPortal.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("Key")
+                    b.HasIndex("TenantId");
+
+                    b.HasIndex("TenantId", "Key")
                         .IsUnique();
 
                     b.ToTable("SystemSettings");
+                });
+
+            modelBuilder.Entity("PrintingBooksPortal.Models.Tenant", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ContactEmail")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<int?>("MaxBooks")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("MaxShops")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("OwnerName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Phone")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("Plan")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Tenants");
+                });
+
+            modelBuilder.Entity("PrintingBooksPortal.Models.TenantApiKey", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("KeyHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("KeyPrefix")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("nvarchar(8)");
+
+                    b.Property<int>("TenantId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("KeyHash")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId");
+
+                    b.ToTable("TenantApiKeys");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
@@ -500,7 +621,14 @@ namespace PrintingBooksPortal.Migrations
                         .WithMany("Users")
                         .HasForeignKey("ShopId");
 
+                    b.HasOne("PrintingBooksPortal.Models.Tenant", "Tenant")
+                        .WithMany("Users")
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Shop");
+
+                    b.Navigation("Tenant");
                 });
 
             modelBuilder.Entity("PrintingBooksPortal.Models.Book", b =>
@@ -511,7 +639,26 @@ namespace PrintingBooksPortal.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("PrintingBooksPortal.Models.Tenant", "Tenant")
+                        .WithMany("Books")
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.Navigation("Board");
+
+                    b.Navigation("Tenant");
+                });
+
+            modelBuilder.Entity("PrintingBooksPortal.Models.EducationalBoard", b =>
+                {
+                    b.HasOne("PrintingBooksPortal.Models.Tenant", "Tenant")
+                        .WithMany("Boards")
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Tenant");
                 });
 
             modelBuilder.Entity("PrintingBooksPortal.Models.PrintLog", b =>
@@ -528,9 +675,28 @@ namespace PrintingBooksPortal.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("PrintingBooksPortal.Models.Tenant", "Tenant")
+                        .WithMany("PrintLogs")
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.Navigation("Book");
 
                     b.Navigation("Shop");
+
+                    b.Navigation("Tenant");
+                });
+
+            modelBuilder.Entity("PrintingBooksPortal.Models.Shop", b =>
+                {
+                    b.HasOne("PrintingBooksPortal.Models.Tenant", "Tenant")
+                        .WithMany("Shops")
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Tenant");
                 });
 
             modelBuilder.Entity("PrintingBooksPortal.Models.ShopBookAssignment", b =>
@@ -547,9 +713,39 @@ namespace PrintingBooksPortal.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("PrintingBooksPortal.Models.Tenant", "Tenant")
+                        .WithMany("Assignments")
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.Navigation("Book");
 
                     b.Navigation("Shop");
+
+                    b.Navigation("Tenant");
+                });
+
+            modelBuilder.Entity("PrintingBooksPortal.Models.SystemSetting", b =>
+                {
+                    b.HasOne("PrintingBooksPortal.Models.Tenant", "Tenant")
+                        .WithMany("Settings")
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Tenant");
+                });
+
+            modelBuilder.Entity("PrintingBooksPortal.Models.TenantApiKey", b =>
+                {
+                    b.HasOne("PrintingBooksPortal.Models.Tenant", "Tenant")
+                        .WithMany("ApiKeys")
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Tenant");
                 });
 
             modelBuilder.Entity("PrintingBooksPortal.Models.Book", b =>
@@ -569,6 +765,25 @@ namespace PrintingBooksPortal.Migrations
                     b.Navigation("Assignments");
 
                     b.Navigation("PrintLogs");
+
+                    b.Navigation("Users");
+                });
+
+            modelBuilder.Entity("PrintingBooksPortal.Models.Tenant", b =>
+                {
+                    b.Navigation("ApiKeys");
+
+                    b.Navigation("Assignments");
+
+                    b.Navigation("Boards");
+
+                    b.Navigation("Books");
+
+                    b.Navigation("PrintLogs");
+
+                    b.Navigation("Settings");
+
+                    b.Navigation("Shops");
 
                     b.Navigation("Users");
                 });

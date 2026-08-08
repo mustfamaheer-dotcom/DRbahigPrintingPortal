@@ -16,5 +16,8 @@ public class EducationalBoard
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
+    public int TenantId { get; set; }
+    public Tenant? Tenant { get; set; }
+
     public ICollection<Book> Books { get; set; } = new List<Book>();
 }

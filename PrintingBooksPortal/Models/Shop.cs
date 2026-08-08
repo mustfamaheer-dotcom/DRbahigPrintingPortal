@@ -19,6 +19,9 @@ public class Shop
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
+    public int TenantId { get; set; }
+    public Tenant? Tenant { get; set; }
+
     public ICollection<ShopBookAssignment> Assignments { get; set; } = new List<ShopBookAssignment>();
     public ICollection<ApplicationUser> Users { get; set; } = new List<ApplicationUser>();
     public ICollection<PrintLog> PrintLogs { get; set; } = new List<PrintLog>();

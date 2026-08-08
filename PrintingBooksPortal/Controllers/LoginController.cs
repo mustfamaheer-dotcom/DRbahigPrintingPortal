@@ -1,5 +1,8 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using PrintingBooksPortal.Data;
 using PrintingBooksPortal.Models;
 
 namespace PrintingBooksPortal.Controllers;
@@ -24,18 +27,54 @@ public class LoginController : ControllerBase
     public async Task<IActionResult> Login([FromForm] string email, [FromForm] string password, [FromForm] bool rememberMe)
     {
         var result = await _signInManager.PasswordSignInAsync(email, password, rememberMe, lockoutOnFailure: false);
-        if (result.Succeeded)
+        if (!result.Succeeded)
+            return Redirect("/login?error=" + Uri.EscapeDataString("Invalid email or password"));
+
+        var user = await _userManager.FindByEmailAsync(email);
+        if (user == null) return Redirect("/");
+
+        // Block deactivated tenant users at sign-in (§4.6)
+        if (user.TenantId.HasValue)
         {
-            var user = await _userManager.FindByEmailAsync(email);
-            if (user != null)
+            var db = HttpContext.RequestServices.GetRequiredService<AppDbContext>();
+            var tenant = await db.Tenants.FindAsync(user.TenantId.Value);
+            if (tenant == null || !tenant.IsActive)
             {
-                if (await _userManager.IsInRoleAsync(user, "Admin"))
-                    return Redirect("/admin/dashboard");
-                if (await _userManager.IsInRoleAsync(user, "Shop"))
-                    return Redirect("/shop/mybooks");
+                await _signInManager.SignOutAsync();
+                return Redirect("/login?error=" + Uri.EscapeDataString("Account is disabled. Contact your administrator."));
             }
-            return Redirect("/");
         }
-        return Redirect("/login?error=" + Uri.EscapeDataString("Invalid email or password"));
+
+        // First login after seed: force password change before anything else (§4.8)
+        if (user.MustChangePassword)
+        {
+            await _signInManager.SignInAsync(user, rememberMe);
+            return Redirect("/account/change-password");
+        }
+
+        if (await _userManager.IsInRoleAsync(user, "SystemAdmin")) return Redirect("/sa/dashboard");
+        if (await _userManager.IsInRoleAsync(user, "Teacher"))    return Redirect("/admin/dashboard");
+        if (await _userManager.IsInRoleAsync(user, "Shop"))       return Redirect("/shop/mybooks");
+        return Redirect("/");
+    }
+
+    [HttpPost("change-password")]
+    [Authorize]
+    [IgnoreAntiforgeryToken]
+    public async Task<IActionResult> ChangePassword([FromForm] string currentPassword, [FromForm] string newPassword)
+    {
+        var user = await _userManager.GetUserAsync(User);
+        if (user == null)
+            return Redirect("/login");
+
+        var result = await _userManager.ChangePasswordAsync(user, currentPassword, newPassword);
+        if (!result.Succeeded)
+            return Redirect("/account/change-password?error=" + Uri.EscapeDataString(string.Join("; ", result.Errors.Select(e => e.Description))));
+
+        user.MustChangePassword = false;
+        await _userManager.UpdateAsync(user);
+
+        await _signInManager.SignOutAsync();
+        return Redirect("/login?message=" + Uri.EscapeDataString("Password changed. Please sign in again."));
     }
 }

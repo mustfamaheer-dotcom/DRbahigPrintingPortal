@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using PrintingBooksPortal.Components;
 using PrintingBooksPortal.Data;
 using PrintingBooksPortal.Hubs;
+using PrintingBooksPortal.Middleware;
 using PrintingBooksPortal.Models;
 using PrintingBooksPortal.Services;
 
@@ -11,14 +12,19 @@ var builder = WebApplication.CreateBuilder(args);
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 var isProduction = builder.Environment.IsProduction();
+var multiTenancyEnabled = builder.Configuration.GetValue<bool?>("MultiTenancy:Enabled") ?? true;
 
-builder.Services.AddDbContext<AppDbContext>(options =>
+builder.Services.AddSingleton(new MultiTenancyOptions { Enabled = multiTenancyEnabled }); // AppDbContext ctor param
+
+void ConfigureDbContext(DbContextOptionsBuilder options, string cs)
 {
     if (isProduction)
-        options.UseSqlServer(connectionString);
+        options.UseSqlServer(cs);
     else
-        options.UseSqlite(connectionString);
-});
+        options.UseSqlite(cs);
+}
+
+builder.Services.AddDbContext<AppDbContext>(options => ConfigureDbContext(options, connectionString));
 
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 {
@@ -28,6 +34,7 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
     options.SignIn.RequireConfirmedAccount = false;
 })
 .AddEntityFrameworkStores<AppDbContext>()
+.AddClaimsPrincipalFactory<TenantClaimsPrincipalFactory>()
 .AddDefaultTokenProviders();
 
 builder.Services.ConfigureApplicationCookie(options =>
@@ -49,16 +56,22 @@ builder.Services.ConfigureApplicationCookie(options =>
 
 builder.Services.AddAuthorization(options =>
 {
-    options.AddPolicy("AdminOnly", policy => policy.RequireRole("Admin"));
-    options.AddPolicy("ShopOnly", policy => policy.RequireRole("Shop"));
+    options.AddPolicy("AdminOnly",   policy => policy.RequireRole("Admin")); // legacy — see §4.5 transition
+    options.AddPolicy("ShopOnly",    policy => policy.RequireRole("Shop"));
+    options.AddPolicy("SystemAdminOnly", policy => policy.RequireRole("SystemAdmin"));
+    options.AddPolicy("TenantAdmin",     policy => policy.RequireRole("Teacher", "SystemAdmin"));
+    options.AddPolicy("TenantUser",      policy => policy.RequireRole("Teacher", "Shop"));
 });
 
+builder.Services.AddScoped<ITenantContext, TenantContext>();
 builder.Services.AddScoped<FileStorageService>();
 builder.Services.AddScoped<PrintLoggingService>();
 builder.Services.AddScoped<IWatermarkService, WatermarkService>();
 builder.Services.AddScoped<ISettingsService, SettingsService>();
 builder.Services.AddSingleton<PrintTokenService>();
 builder.Services.AddSingleton<IPdfSecurityService, PdfSecurityService>();
+builder.Services.AddScoped<IApiKeyService, ApiKeyService>();
+builder.Services.AddScoped<SystemAdminService>();
 builder.Services.AddHttpContextAccessor();
 
 builder.Services.AddRazorComponents()
@@ -66,7 +79,16 @@ builder.Services.AddRazorComponents()
 
 builder.Services.AddControllers();
 builder.Services.AddSignalR();
-builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(builder.Configuration["AppUrl"] ?? "http://localhost:5035") });
+builder.Services.AddScoped<ServerAuthenticationMessageHandler>();
+builder.Services.AddScoped(sp =>
+{
+    var handler = sp.GetRequiredService<ServerAuthenticationMessageHandler>();
+    handler.InnerHandler = new SocketsHttpHandler();   // must end the chain with a real handler
+    return new HttpClient(handler)
+    {
+        BaseAddress = new Uri(builder.Configuration["AppUrl"] ?? "http://localhost:5035")
+    };
+});
 
 var app = builder.Build();
 
@@ -95,6 +117,7 @@ if (requireHttps)
 app.UseStaticFiles();
 app.UseRouting();
 app.UseAuthentication();
+app.UseMiddleware<TenantActivityMiddleware>();
 app.UseAuthorization();
 app.UseAntiforgery();
 
@@ -124,19 +147,23 @@ try
     }
     else
     {
-        try
-        {
-            await db.Database.MigrateAsync();
-        }
-        catch
-        {
-            await db.Database.EnsureCreatedAsync();
-        }
+        // Dev/SQLite: migrations are authored for SQL Server (AddTenantManagement needs AddServer features),
+        // so build the schema directly from the model instead of replaying the SQL Server migration script.
+        await db.Database.EnsureCreatedAsync();
     }
 
     var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
     var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
-    await DbSeeder.SeedAsync(db, userManager, roleManager);
+    await DbSeeder.SeedAsync(db, userManager, roleManager, builder.Configuration);
+
+    // Repair: users created before tenancy wiring had a wrong/missing TenantId,
+    // which breaks tenant-scoped visibility (their shop's books never appear).
+    // Inherit it from the user's shop. Idempotent; safe on both SQLite and SQL Server.
+    var repaired = await db.Database.ExecuteSqlRawAsync(
+        "UPDATE AspNetUsers SET TenantId = (SELECT s.TenantId FROM Shops s WHERE s.Id = AspNetUsers.ShopId) WHERE ShopId IS NOT NULL AND (TenantId IS NULL OR TenantId <> (SELECT s.TenantId FROM Shops s WHERE s.Id = AspNetUsers.ShopId))");
+    if (repaired > 0)
+        logger.LogInformation("Tenant-repaired {Count} users missing TenantId.", repaired);
+
     logger.LogInformation("Database initialization completed.");
 }
 catch (Exception ex)
@@ -146,3 +173,5 @@ catch (Exception ex)
 }
 
 app.Run();
+
+public partial class Program { } // needed by WebApplicationFactory in tests

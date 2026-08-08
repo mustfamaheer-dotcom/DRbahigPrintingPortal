@@ -10,6 +10,7 @@
 | **Agent** | `BookShopPrintAgent\` (Kestrel + SumatraPDF polling agent) |
 | **Production** | `https://drbaheegbook.runasp.net` (RunASP.NET, IIS `site79455`, SQL Server `db59750.databaseasp.net`) |
 | **Status** | Spec complete — implementation not started |
+| **Revision** | v1.2 — fixed SystemAdmin account: `sysadmin@drbahigPortal.com` / `SysAdmin@2026` (seed + backfill aligned), forced first-login change (§4.8), secrets hygiene (§15.5), validation/criteria/risks |
 
 ---
 
@@ -46,6 +47,7 @@
 | Agent communication | **Polling remains the baseline** (current agent works). SignalR is optional enhancement, not required for SaaS. | Zero agent rewrite needed for multi-tenancy; only portal-side tenant scoping. |
 | Billing / Email / Self-signup | Deferred (schema prepared) | Core SaaS first. |
 | Roles | `SystemAdmin` (global), `Teacher` (tenant), `Shop` (tenant) | |
+| SystemAdmin provisioning | Seed & backfill guarantee exactly **one** `SystemAdmin`: `sysadmin@drbahigPortal.com` / `SysAdmin@2026`. First-login password change is **optional** (config `Sa:ForcePasswordChangeOnFirstLogin`, default `false` — the owner's credentials work as-is). Legacy `Admin` accounts stay tenant-scoped (`Teacher`, TenantId=1) — they do **not** get platform rights | Without this, no user can access `/sa/*` after migration — the critical gap found in review |
 | Feature flag | `MultiTenancy:Enabled` in appsettings — instant rollback path | |
 
 ---
@@ -424,10 +426,14 @@ builder.Services.AddAuthorization(options =>
 });
 ```
 
-### 4.5 Role migration strategy (existing Admin → Teacher)
+### 4.5 Role migration strategy (existing Admin → Teacher; new SystemAdmin account)
 
-- Add role `Teacher`; keep `Admin` role in code during transition.
-- `DbSeeder` promotes every existing `Admin` user to `Teacher` and sets their `TenantId = 1`; then (after acceptance) `Admin` role can be removed.
+- Add roles `Teacher` and `SystemAdmin`; keep `Admin` role in code during transition.
+- **The platform owner is a brand-new dedicated account, seeded by `DbSeeder` (idempotent, §12.6):**
+  - `sysadmin@drbahigPortal.com` / `SysAdmin@2026` — `SystemAdmin` role, **no `TenantId`**.
+  - First login uses `SysAdmin@2026` as-is; forced change is an optional config toggle (§4.8). If the account already exists, the seeder never touches its password.
+- **Legacy `admin@printingbooks.com` (and any other `Admin` users) are promoted to `Teacher` with `TenantId = 1`** — they keep their existing workspace exactly as today, they do **not** become platform administrators.
+- After acceptance, the `Admin` role can be removed from code and DB.
 - Page attributes change from `[Authorize(Roles = "Admin")]` → `[Authorize(Roles = "Teacher,SystemAdmin")]` — the string literal is the role list; no separate policy needed for pages.
 
 ### 4.6 `LoginController` changes (code)
@@ -456,6 +462,13 @@ public async Task<IActionResult> Login([FromForm] string email, [FromForm] strin
         }
     }
 
+    // First login after seed: force password change before anything else (§4.8)
+    if (user.MustChangePassword)
+    {
+        await _signInManager.SignInAsync(user, rememberMe);
+        return Redirect("/account/change-password");
+    }
+
     if (await _userManager.IsInRoleAsync(user, "SystemAdmin")) return Redirect("/sa/dashboard");
     if (await _userManager.IsInRoleAsync(user, "Teacher"))    return Redirect("/admin/dashboard");
     if (await _userManager.IsInRoleAsync(user, "Shop"))       return Redirect("/shop/mybooks");
@@ -471,6 +484,15 @@ builder.Services.AddScoped<AppDbContext>();          // already registered via A
 // note: AddDbContext is called BEFORE; AppDbContext ctor resolves ITenantContext automatically
 builder.Services.AddSingleton<IApiKeyService, ApiKeyService>();   // §7.1
 ```
+
+### 4.8 Optional forced password change at first login (config toggle)
+
+- `Models/ApplicationUser.cs` gains `public bool MustChangePassword { get; set; }` (Identity user store fully supports added bools — one migration column).
+- Seeder sets `MustChangePassword = true` ONLY when `Sa:ForcePasswordChangeOnFirstLogin` (config) is `true` (§12.6). **Default `false`** — the fixed credentials `sysadmin@drbahigPortal.com` / `SysAdmin@2026` work as-is, which is the stated requirement.
+- `LoginController` (after the tenant-active check in §4.6, before the role redirect): if `user.MustChangePassword`, sign in the cookie but redirect to `/account/change-password` — the endpoint accepts the new password (Identity password policy), updates the hash, clears the flag, then redirects to the role home.
+- New Blazor page `Account/ChangePassword` (route `/account/change-password`) + `POST /api/account/change-password`, protected by the `SystemAdminOnly` policy; no other user path sets this flag.
+
+> Policy note: the seed password `SysAdmin@2026` meets current policy (digit + length ≥ 6). If you later strengthen the policy (e.g. require non-alphanumeric), keep §12.6 seed in sync or change-password flow will refuse old values only once.
 
 ---
 
@@ -582,7 +604,9 @@ Request: { "newPassword": "New@1234" }
 
 | Endpoint | Change |
 |---|---|
-| `GET /api/pdf/view-secure/{bookId}` | `[Authorize(Roles = "Shop,Teacher,SystemAdmin")]`; `ValidateAccess` scoped by `_tenantContext.TenantId` |
+| `SecurePdfController.ValidateAccess` (lines 62-64) | In-code `IsInRoleAsync(user, "Admin")` → replace with `IsInRoleAsync(user, "Teacher") || IsInRoleAsync(user, "SystemAdmin")` + `_tenantContext.TenantId` scope |
+| `SecurePdfController.IsJobOwnerAsync` (lines 79-81) | Same role-swap; job owner check also verifies `info.TenantId == appUser.TenantId` (fallback to `_tenantContext.TenantId` for SystemAdmin) |
+| `GET /api/pdf/view-secure/{bookId}` | `[Authorize(Roles = "Shop,Teacher,SystemAdmin")]` (already in list — the two in-code role checks above are the missing piece) |
 | `POST /api/pdf/process-print` | Shop-only (unchanged); job stores `TenantId` (§7) |
 | `GET /api/pdf/print-file/{jobId}` | `IsJobOwnerAsync` also verifies `info.TenantId == _tenantContext.TenantId` |
 | `GET /api/pdf/download-secured/{jobId}` | Agent path: key → tenant; reject if job.TenantId != key.TenantId |
@@ -835,6 +859,8 @@ Encryption/decryption logic unchanged. Callers pass per-tenant paths.
     <a href="/sa/dashboard">Dashboard</a>
     <a href="/sa/teachers">Teachers</a>
     <a href="/sa/analytics">Analytics</a>
+    <!-- SystemAdmin (sysadmin@drbahigPortal.com) is the ONLY platform role;
+         legacy admin@printingbooks.com is a Teacher and does not see this group -->
 }
 else if (role == "Teacher")
 {
@@ -978,6 +1004,8 @@ In `AddTenantAndTenantId.Up()` (order matters):
 ```sql
 -- One-time: assign existing Shop users to tenant 1 (already default) — no-op, kept for completeness
 -- Promote all existing Admins to Teacher role and ensure TenantId = 1
+-- NOTE: NO admin is promoted to SystemAdmin. The platform owner is the dedicated
+-- account sysadmin@drbahigPortal.com, seeded by DbSeeder (§12.6).
 INSERT INTO [AspNetUserRoles] ([UserId], [RoleId])
 SELECT u.[Id], r.[Id]
 FROM [AspNetUsers] u
@@ -991,6 +1019,8 @@ UPDATE [AspNetUsers] SET [TenantId] = 1
 WHERE [Id] IN (SELECT [UserId] FROM [AspNetUserRoles] ur JOIN [AspNetRoles] r ON r.[Id] = ur.[RoleId] WHERE r.[Name] = 'Teacher');
 ```
 
+> The §12.6 seeder creates `sysadmin@drbahigPortal.com` (SystemAdmin, no TenantId) at first startup after this migration, so **no account-promotion SQL is needed here**. If an unintended account was ever assigned `SystemAdmin` by accident: `DELETE FROM AspNetUserRoles WHERE RoleId = (SELECT Id FROM AspNetRoles WHERE Name = 'SystemAdmin');` then restart — the seeder re-provisions the one official account idempotently.
+
 ### 12.4 Validation SQL (run on staging copy before production)
 
 ```sql
@@ -1002,12 +1032,72 @@ SELECT COUNT(*) AS AdminNotPromoted    FROM AspNetUsers u
   WHERE r.Name = 'Admin' AND NOT EXISTS (SELECT 1 FROM AspNetUserRoles ur2
     JOIN AspNetRoles r2 ON r2.Id = ur2.RoleId WHERE ur2.UserId = u.Id AND r2.Name = 'Teacher');
 SELECT COUNT(*) AS DupSettings        FROM SystemSettings GROUP BY TenantId, Key HAVING COUNT(*) > 1;
--- All five queries must return 0.
+-- The critical gate: the ONE official platform owner must exist and reach /sa/* after migration
+SELECT COUNT(*) AS SysAdminOfficial  FROM AspNetUsers u
+  WHERE u.Email = 'sysadmin@drbahigPortal.com';                       -- must be 1
+SELECT COUNT(*) AS ExtraSysAdmins    FROM AspNetUserRoles ur
+  JOIN AspNetRoles r ON r.Id = ur.RoleId AND r.Name = 'SystemAdmin'   -- must be 0
+  JOIN AspNetUsers u2 ON u2.Id = ur.UserId
+  WHERE LOWER(u2.Email) <> 'sysadmin@drbahigportal.com';
+-- All data-integrity queries must return 0; SysAdminOfficial must be 1; ExtraSysAdmins must be 0.
 ```
 
 ### 12.5 SQLite (dev) note
 
 Add `TenantId` to the SQLite fallback DDL in `SettingsService.EnsureTableCreatedAsync` and dev `appsettings.Development.json` DB is recreated via `EnsureCreated` — dev DB can simply be deleted and re-seeded.
+
+### 12.6 `DbSeeder` — SystemAdmin provisioning (idempotent, fixed credentials)
+
+Runs at every startup, before anything else. Ensures the platform is never left without an owner, **even if the §12.3 backfill was skipped or the account was deleted**:
+
+```csharp
+// Data/DbSeeder.cs — add before board seeding (runs every startup)
+const string SysAdminEmail = "sysadmin@drbahigPortal.com";
+const string SysAdminPassword = "SysAdmin@2026";     // fixed requirement; override via env
+                                                     // SystemAdmin__InitialPassword
+
+if (!await roleManager.RoleExistsAsync("SystemAdmin"))
+    await roleManager.CreateAsync(new IdentityRole("SystemAdmin"));
+
+var official = await userManager.FindByEmailAsync(SysAdminEmail);
+if (official == null)
+{
+    official = new ApplicationUser
+    {
+        UserName = SysAdminEmail,
+        Email = SysAdminEmail,
+        FullName = "Platform Administrator",
+        EmailConfirmed = true,
+        TenantId = null,                                     // SystemAdmin: no tenant (fail-closed §2.1)
+        MustChangePassword = false                           // default; optional true per §4.8
+    };
+    var created = await userManager.CreateAsync(official, SysAdminPassword);
+    if (created.Succeeded)
+    {
+        await userManager.AddToRoleAsync(official, "SystemAdmin");
+        if (config["Sa:ForcePasswordChangeOnFirstLogin"] == "true")
+        {
+            official.MustChangePassword = true;                 // optional, default off (§4.8)
+            await db.SaveChangesAsync();
+        }
+        logger.LogWarning("[SystemAdmin] dedicated owner account seeded.");
+    }
+}
+else if (!await userManager.IsInRoleAsync(official, "SystemAdmin"))
+{
+    await userManager.AddToRoleAsync(official, "SystemAdmin");
+}
+
+// Ensure only the ONE official account holds SystemAdmin (heals accidental grants)
+foreach (var holder in await userManager.GetUsersInRoleAsync("SystemAdmin"))
+    if (holder.Email != SysAdminEmail)
+        await userManager.RemoveFromRoleAsync(holder, "SystemAdmin");
+```
+
+- **Fixed official account (only one):** `sysadmin@drbahigPortal.com` / `SysAdmin@2026` — `SystemAdmin` role, **no `TenantId`**. The seeder is idempotent: an existing account's **password is never reset**, only its role is (re)assigned to the official account, and any other accidental holder of `SystemAdmin` is stripped (keeps `ExtraSysAdmins = 0` in §12.4).
+- **First login uses the fixed credentials as-is (default).** Forced change is optional: with `Sa:ForcePasswordChangeOnFirstLogin=true` the seeder sets `MustChangePassword = true` (§4.8) and login redirects once to `/account/change-password`; cleared on successful change.
+- Legacy `admin@printingbooks.com` (and any other `Admin` users) are **NOT** SystemAdmin — they are migrated to `Teacher` / tenant 1 only (§12.3) and keep working via the transition-friendly `Admin` role until it is removed (§4.5).
+- Credential rotation later: read `SystemAdmin__InitialPassword` from env var (config override) — no code change needed. The fixed seed value is a secret by nature and deleted from committed config in §15.5 after first rotations.
 
 ---
 
@@ -1079,9 +1169,11 @@ public class TestAppFactory : WebApplicationFactory<Program>
 **AuthAndRoleTests**
 19. `AdminUser_PromotedToTeacher_StillAccessesAdminPages`
 20. `NoTenantIdClaim_QueriesReturnEmpty` (fail-closed)
+21. `Seeder_CreatesSystemAdmin_WithFixedCredentials` (seed with default config → `sysadmin@drbahigPortal.com` exists, SystemAdmin role, logs in with `SysAdmin@2026`; with `ForcePasswordChangeOnFirstLogin=true` → `MustChangePassword` set and login redirected once)
+22. `Seeder_Idempotent_DoesNotResetExistingPassword` (account pre-created with custom password → seed leaves it untouched)
 
 **MigrationBackfillTests**
-21. `BackfillSql_AssignsExistingData_ToTenant1`
+23. `BackfillSql_AssignsExistingData_ToTenant1`
 
 ### 13.4 Run command
 
@@ -1145,7 +1237,8 @@ dotnet publish -c Release -p:PublishProfile=MonsterASP -p:Password=%DEPLOY_PASSW
 
 | # | Action | Expected |
 |---|---|---|
-| 1 | Login as legacy admin | Redirect `/sa/dashboard` (or `/admin/dashboard` as Teacher) |
+| 1 | Login as `sysadmin@drbahigPortal.com` / `SysAdmin@2026` | SystemAdmin dashboard `/sa/dashboard` renders; `sysadmin` has no tenant claim (TenantId null) |
+| 1b | Login as legacy `admin@printingbooks.com` | Redirect `/admin/dashboard` — Teacher on tenant 1, data intact, platform pages NOT reachable |
 | 2 | Create Teacher via `/sa/teachers` | 201; new user can log in |
 | 3 | Teacher uploads book, creates shop+user | Works; files under `App_Data/2/Books/` |
 | 4 | Login as tenant's shop user | Only tenant's books listed |
@@ -1158,6 +1251,19 @@ dotnet publish -c Release -p:PublishProfile=MonsterASP -p:Password=%DEPLOY_PASSW
 
 See §14.3.
 
+### 15.5 Secrets hygiene (do BEFORE the first SaaS deploy — currently violated)
+
+The repo currently commits production secrets in plaintext. **Rotate all of them**, then remove them from tracked files:
+
+| Currently committed | Location | Action |
+|---|---|---|
+| SQL Server password (`db59750` connection string) | `PrintingBooksPortal/appsettings.Production.json` | Change via host control panel → move to env var `ConnectionStrings__DefaultConnection` → delete the password from the file |
+| Agent API key (`AgentSettings:ApiKey`) | `PrintingBooksPortal/appsettings.Production.json` | Obsolete after §7.1 API keys go live — delete the `AgentSettings` block entirely |
+| `OwnerPassword` / watermark password | `PrintingBooksPortal/appsettings.Production.json` + `BookShopPrintAgent/appsettings.json` | Rotate; read from env var/config in agent; never commit |
+| Hardcoded seed passwords (`Admin@123` in `DbSeeder`; `SysAdmin@2026` system account) | `Data/DbSeeder.cs` | `Admin@123` removed (§12.6 rework); system account password is fixed per requirement — rotate via `SystemAdmin__InitialPassword` env override and/or `Sa:ForcePasswordChangeOnFirstLogin=true` (§4.8) when the owner wants to renew it |
+
+After rotation: `git rm --cached` the cleared files (they stay on disk), confirm `git log -p` doesn't expose new values, and re-test a full shop print before opening `MultiTenancy:Enabled`.
+
 ---
 
 ## 16. Documentation Updates
@@ -1168,6 +1274,7 @@ See §14.3.
 | `README.md` | Roles, SaaS overview, quick start with 2 tenants |
 | `PrintingBooksPortal/database&server.md` | New tables DDL, migration steps, backfill |
 | `SAAS-PLAN.md` (this file) | Keep as the working spec; mark phases complete as implemented |
+| Credential references (legacy `admin@printingbooks.com` / `Admin@123`) | `database&server.md`, `SeedData.sql`, `moveToServer.MD`, `PROJECT-DOCUMENTATION.md` — relabel as **Tenant-1 Teacher (legacy admin)**; document new SystemAdmin account `sysadmin@drbahigPortal.com` (fixed credentials; optional first-login change per §4.8) |
 
 ---
 
@@ -1184,7 +1291,9 @@ See §14.3.
 9. Production data migrated losslessly (validation SQL all zeros).
 10. Rollback path tested (§14.3).
 11. `dotnet test` green; UAT script §15.3 fully passed.
-12. Docs updated; deployment runbook executed cleanly.
+12. **The one official SystemAdmin is provisioned and verified after any deployment**: (a) `sysadmin@drbahigPortal.com` / `SysAdmin@2026` logs in and reaches `/sa/dashboard`; (b) `SysAdminOfficial = 1` and `ExtraSysAdmins = 0` in §12.4; (c) legacy `admin@printingbooks.com` still works as Teacher/tenant 1; (d) seed password placeholder removed per §15.5.
+13. **No production secrets in the repo**: §15.5 rotation done; agent keys are generated via `/api/sa/tenants/{id}/apikeys`; `AgentSettings` block removed from committed config.
+14. Docs updated; deployment runbook executed cleanly.
 
 ---
 
@@ -1198,6 +1307,9 @@ See §14.3.
 | Existing `Admin` role users confused | Medium | Auto-promote to Teacher + tenant 1; keep `Admin` role working during transition |
 | RunASP.NET memory limits | Low | Per-tenant filters are cheap; indexed TenantId; monitor |
 | Agent version spread | Low | Portal scoping is server-side; old agents keep working; re-key via installer config step |
+| **SystemAdmin missing/unreachable after migration** | **Critical** | §12.6 seeder (idempotent, fixed account `sysadmin@drbahigPortal.com`) + §12.4 `SysAdminOfficial = 1` / `ExtraSysAdmins = 0` gates + §15.3 steps 1-1b |
+| **Committed prod secrets** (DB password, account API key, `Admin@123`, seed `SysAdmin@2026`) | **High** | §15.5: rotate, move to env vars, remove committed values, drop `AgentSettings` block, `git rm --cached`, re-test full print |
+| Validation SQL skipped by human error | Medium | Wrap §12.4 in a `scripts/validate-migration.sql` run as a mandatory step in §15.2 before code deploy |
 
 ---
 

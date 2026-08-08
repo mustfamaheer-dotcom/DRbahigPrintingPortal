@@ -13,6 +13,9 @@ public class SystemSetting
 
     [MaxLength(2000)]
     public string? ValueString { get; set; }
+
+    public int TenantId { get; set; }
+    public Tenant? Tenant { get; set; }
 }
 
 public static class SystemSettingKeys

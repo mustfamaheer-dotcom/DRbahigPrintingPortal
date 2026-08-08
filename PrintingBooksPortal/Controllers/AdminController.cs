@@ -10,7 +10,8 @@ namespace PrintingBooksPortal.Controllers;
 
 [ApiController]
 [Route("api/admin")]
-[Authorize(Roles = "Admin")]
+[Authorize(Roles = "Teacher,SystemAdmin")]
+[IgnoreAntiforgeryToken]   // JSON API called from Blazor circuits — no form antiforgery token is attached
 public class AdminController : ControllerBase
 {
     private readonly AppDbContext _db;

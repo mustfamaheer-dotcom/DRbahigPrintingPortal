@@ -24,6 +24,8 @@ public class SecurePdfController : ControllerBase
     private readonly IPdfSecurityService _pdfSecurity;
     private readonly IConfiguration _configuration;
     private readonly ILogger<SecurePdfController> _logger;
+    private readonly IApiKeyService _apiKeys;
+    private readonly ITenantContext _tenantContext;
 
     public SecurePdfController(
         AppDbContext db,
@@ -35,7 +37,9 @@ public class SecurePdfController : ControllerBase
         PrintTokenService printTokenService,
         IPdfSecurityService pdfSecurity,
         IConfiguration configuration,
-        ILogger<SecurePdfController> logger)
+        ILogger<SecurePdfController> logger,
+        IApiKeyService apiKeys,
+        ITenantContext tenantContext)
     {
         _db = db;
         _fileStorage = fileStorage;
@@ -47,7 +51,17 @@ public class SecurePdfController : ControllerBase
         _pdfSecurity = pdfSecurity;
         _configuration = configuration;
         _logger = logger;
+        _apiKeys = apiKeys;
+        _tenantContext = tenantContext;
     }
+
+    // ── auth helpers ──
+
+    // When true, a valid agent API key serves print jobs of ALL tenants.
+    // Used by single-agent deployments (one print center PC serving every shop).
+    // Default (false) keeps strict per-tenant agent scoping.
+    private bool ServeAllTenants
+        => _configuration.GetValue<bool?>("AgentSettings:ServeAllTenants") ?? false;
 
     private async Task<(Book? book, ApplicationUser? user)> ValidateAccess(int bookId)
     {
@@ -59,8 +73,10 @@ public class SecurePdfController : ControllerBase
         if (user == null)
             return (null, null);
 
-        var isAdmin = await _userManager.IsInRoleAsync(user, "Admin");
-        if (isAdmin)
+        var isPrivileged = await _userManager.IsInRoleAsync(user, "Teacher")
+                        || await _userManager.IsInRoleAsync(user, "SystemAdmin");
+        var isOwnTenant = user.TenantId.HasValue && book.TenantId == user.TenantId.Value;
+        if (isPrivileged && isOwnTenant)
             return (book, user);
 
         var hasAccess = await _db.ShopBookAssignments
@@ -69,39 +85,35 @@ public class SecurePdfController : ControllerBase
         return hasAccess ? (book, user) : (null, null);
     }
 
-    private async Task<bool> IsJobOwnerAsync(string jobId, System.Security.Claims.ClaimsPrincipal user)
+    private async Task<bool> IsJobOwnerAsync(string jobId, ClaimsPrincipal user)
     {
-        if (PendingPrintJobs.Jobs.TryGetValue(jobId, out var info))
+        if (!PendingPrintJobs.Jobs.TryGetValue(jobId, out var info))
         {
-            var appUser = await _userManager.GetUserAsync(user);
-            if (appUser == null) return false;
-
-            var isAdmin = await _userManager.IsInRoleAsync(appUser, "Admin");
-            // Admin can access any job; Shop can only access their own jobs
-            return isAdmin || info.ShopId == appUser.ShopId;
+            // fall back to the claimed-but-active jobs (waiting for release / download)
+            if (!ActiveJobStore.Jobs.TryGetValue(jobId, out info))
+                return false;
         }
-        return false;
+
+        var appUser = await _userManager.GetUserAsync(user);
+        if (appUser == null) return false;
+
+        var isPrivileged = await _userManager.IsInRoleAsync(appUser, "Teacher")
+                        || await _userManager.IsInRoleAsync(appUser, "SystemAdmin");
+
+        // Tenant check: privileged users can access own-tenant jobs only (§5.2)
+        if (isPrivileged)
+        {
+            return _tenantContext.TenantId > 0 && info.TenantId == _tenantContext.TenantId;
+        }
+
+        // Shop users: job must belong to their shop AND their tenant
+        return info.ShopId == appUser.ShopId && info.TenantId == appUser.TenantId;
     }
 
-    private bool IsValidAgentApiKey()
-    {
-        var configuredKey = _configuration.GetValue<string>("AgentSettings:ApiKey");
-        if (string.IsNullOrEmpty(configuredKey))
-            return false;
-        var providedKey = HttpContext.Request.Headers["X-Api-Key"].FirstOrDefault();
-        return string.Equals(providedKey, configuredKey, StringComparison.Ordinal);
-    }
-
-    private async Task<byte[]?> GetOriginalPdfBytes(int bookId)
-    {
-        var filePath = _fileStorage.GetFilePath((await _db.Books.FindAsync(bookId))?.FilePath ?? "");
-        if (!System.IO.File.Exists(filePath))
-            return null;
-        return await System.IO.File.ReadAllBytesAsync(filePath);
-    }
+    // ── viewing / printing ──
 
     [HttpGet("view-secure/{bookId}")]
-    [Authorize(Roles = "Shop,Admin")]
+    [Authorize(Roles = "Shop,Teacher,SystemAdmin")]
     public async Task<IActionResult> ViewSecurePdf(int bookId)
     {
         var (book, user) = await ValidateAccess(bookId);
@@ -115,10 +127,11 @@ public class SecurePdfController : ControllerBase
 
         try
         {
+            var tenant = await GetTenantNameAsync();
             var originalBytes = await System.IO.File.ReadAllBytesAsync(_fileStorage.GetFilePath(book.FilePath));
             var watermarkEnabled = await _settingsService.IsWatermarkEnabledAsync();
             var watermarkText = await _settingsService.GetWatermarkTextAsync();
-            var watermarked = _watermarkService.ApplyWatermark(originalBytes, shopName, user.UserName ?? "Unknown", DateTime.UtcNow, watermarkEnabled, watermarkText);
+            var watermarked = _watermarkService.ApplyWatermarkWithTenant(originalBytes, tenant, shopName, user.UserName ?? "Unknown", DateTime.UtcNow, watermarkEnabled, watermarkText);
             return Ok(new { pdfData = Convert.ToBase64String(watermarked), watermarkEnabled });
         }
         catch (Exception ex)
@@ -136,6 +149,8 @@ public class SecurePdfController : ControllerBase
         if (user?.ShopId == null)
             return Unauthorized(new { success = false, error = "Access Denied: You are not authorized to print." });
 
+        var tenantId = user.TenantId ?? _tenantContext.TenantId;
+
         var hasAccess = await _db.ShopBookAssignments
             .AnyAsync(a => a.ShopId == user.ShopId && a.BookId == request.BookId && a.IsActive);
 
@@ -144,6 +159,10 @@ public class SecurePdfController : ControllerBase
 
         var book = await _db.Books.FindAsync(request.BookId);
         if (book == null)
+            return NotFound(new { success = false, error = "Book not found." });
+
+        // Ship-level fail-closed: the book must belong to the same tenant
+        if (book.TenantId != tenantId)
             return NotFound(new { success = false, error = "Book not found." });
 
         var filePath = _fileStorage.GetFilePath(book.FilePath);
@@ -157,41 +176,39 @@ public class SecurePdfController : ControllerBase
         var jobId = Guid.NewGuid().ToString("N");
         var userPass = $"PRINT-{jobId}";
         // Security: read OwnerPassword from config or env var; fail if unset in production
-        var ownerPass = _configuration.GetValue<string>("OwnerPassword__KeyVaultOrEnvVar")
-            ?? Environment.GetEnvironmentVariable("OWNER_PASSWORD")
-            ?? throw new InvalidOperationException("OwnerPassword is not configured. Set OwnerPassword__KeyVaultOrEnvVar in config or OWNER_PASSWORD environment variable.");
+        var ownerPass = _configuration.GetValue<string>("OwnerPassword__KeyVaultOrEnvVar");
+        if (string.IsNullOrEmpty(ownerPass))
+            ownerPass = Environment.GetEnvironmentVariable("OWNER_PASSWORD");
+        if (string.IsNullOrEmpty(ownerPass))
+            throw new InvalidOperationException("OwnerPassword is not configured. Set OwnerPassword__KeyVaultOrEnvVar in config or OWNER_PASSWORD environment variable.");
 
-        _logger.LogInformation("ProcessPrint: Job={JobId}, Book={BookId}, Shop={ShopId}, Copies={Copies}",
-            jobId, request.BookId, user.ShopId, copies);
+        _logger.LogInformation("ProcessPrint: Job={JobId}, Book={BookId}, Shop={ShopId}, Tenant={TenantId}, Copies={Copies}",
+            jobId, request.BookId, user.ShopId, tenantId, copies);
 
         try
         {
+            var tenantName = await GetTenantNameAsync();
             var originalBytes = await System.IO.File.ReadAllBytesAsync(filePath);
             var watermarkEnabled = await _settingsService.IsWatermarkEnabledAsync();
             var watermarkText = await _settingsService.GetWatermarkTextAsync();
-            var watermarked = _watermarkService.ApplyWatermark(originalBytes, shopName, user.UserName ?? "Unknown", DateTime.UtcNow, watermarkEnabled, watermarkText);
+            var watermarked = _watermarkService.ApplyWatermarkWithTenant(originalBytes, tenantName, shopName, user.UserName ?? "Unknown", DateTime.UtcNow, watermarkEnabled, watermarkText);
             var securedBytes = _pdfSecurity.EncryptPdfWithPassword(watermarked, userPass, ownerPass);
 
-            var secureDir = Path.Combine(Directory.GetCurrentDirectory(), "SecurePrints");
+            var secureDir = SecurePrintsPath.GetSecureDir(tenantId);
             Directory.CreateDirectory(secureDir);
             var securePath = Path.Combine(secureDir, $"{jobId}.pdf");
             await System.IO.File.WriteAllBytesAsync(securePath, securedBytes);
 
             var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
-            await _printLogging.LogPrintAsync(
-                user.ShopId.Value,
-                request.BookId,
-                copies,
-                user.Id,
-                user.UserName
-            );
+            await _printLogging.LogPrintAsync(tenantId, user.ShopId.Value, request.BookId, copies, user.Id, user.UserName);
 
             _logger.LogInformation("Print logged: Job={JobId}, Shop={ShopId}, Book={BookId}, Copies={Copies}, IP={IP}",
                 jobId, user.ShopId, request.BookId, copies, ipAddress);
 
-            // Track ownership so only the creating shop (or Admin) can download/print the secured file
+            // Track ownership so only the creating shop (or TenantAdmin) can download/print the secured file
             var added = PendingPrintJobs.Jobs.TryAdd(jobId, new PendingJobInfo
             {
+                TenantId = tenantId,
                 ShopId = user.ShopId.Value,
                 Copies = copies,
                 CreatedAt = DateTime.UtcNow,
@@ -207,18 +224,19 @@ public class SecurePdfController : ControllerBase
                 MarginRight = request.MarginRight ?? 25.4
             });
 
-            var queueCount = PendingPrintJobs.Jobs.Count;
-            _logger.LogInformation("Pending queue: Job={JobId} added={Added}, queueSize={Size}", jobId, added, queueCount);
+            _logger.LogInformation("Pending queue: Job={JobId} added={Added}, queueSize={Size}", jobId, added, PendingPrintJobs.Jobs.Count);
 
             return Ok(new
             {
                 success = true,
                 jobId,
                 added,
-                queueCount,
+                queueCount = PendingPrintJobs.Jobs.Count,
                 watermarkEnabled,
                 printerName = request.PrinterName,
-                message = $"Print job {jobId} created for {copies} copy(ies)."
+                message = $"Print job {jobId} created for {copies} copy(ies).",
+                printEndpoint = $"/api/pdf/print-file/{jobId}",
+                downloadEndpoint = $"/api/pdf/download-secured/{jobId}"
             });
         }
         catch (Exception ex)
@@ -230,17 +248,21 @@ public class SecurePdfController : ControllerBase
     }
 
     [HttpGet("print-file/{jobId}")]
-    [Authorize(Roles = "Shop,Admin")]
+    [Authorize(Roles = "Shop,Teacher,SystemAdmin")]
     public async Task<IActionResult> GetPrintFile(string jobId)
     {
         if (!Guid.TryParse(jobId, out _))
             return BadRequest(new { error = "Invalid job ID format." });
 
-        // Verify the job belongs to the current user's shop (or user is Admin)
+        // Verify the job belongs to the current user's shop/tenant (or Teacher/SystemAdmin)
         if (!await IsJobOwnerAsync(jobId, User))
             return Forbid();
 
-        var securePath = Path.Combine(Directory.GetCurrentDirectory(), "SecurePrints", $"{jobId}.pdf");
+        var job = PendingPrintJobs.Jobs.TryGetValue(jobId, out var info) ? info
+                : (ActiveJobStore.Jobs.TryGetValue(jobId, out var active) ? active : null);
+        var tenantId = job?.TenantId ?? _tenantContext.TenantId;
+
+        var securePath = Path.Combine(SecurePrintsPath.GetSecureDir(tenantId), $"{jobId}.pdf");
         if (!System.IO.File.Exists(securePath))
             return NotFound("Print job not found or expired.");
 
@@ -257,18 +279,36 @@ public class SecurePdfController : ControllerBase
         if (!Guid.TryParse(jobId, out _))
             return BadRequest(new { error = "Invalid job ID format." });
 
-        var isAgent = IsValidAgentApiKey();
+        // Agent path: API key resolves a tenant (§7.3)
+        var agentKey = HttpContext.Request.Headers["X-Api-Key"].FirstOrDefault();
+        var agentTenantId = !string.IsNullOrEmpty(agentKey) ? await _apiKeys.ResolveTenantAsync(agentKey) : 0;
 
-        if (!isAgent)
+        int tenantId;
+        if (agentTenantId > 0)
         {
+            var job = PendingPrintJobs.Jobs.TryGetValue(jobId, out var info) ? info
+                    : (ActiveJobStore.Jobs.TryGetValue(jobId, out var active) ? active : null);
+            if (job == null)
+                return NotFound("Print job not found or expired.");
+            if (job.TenantId != agentTenantId && !ServeAllTenants)
+                return Forbid();   // cross-tenant download blocked
+            tenantId = ServeAllTenants ? job.TenantId : agentTenantId;
+        }
+        else
+        {
+            // Browser path: authenticated owner
             if (!(User.Identity?.IsAuthenticated == true))
                 return Unauthorized();
 
             if (!await IsJobOwnerAsync(jobId, User))
                 return Forbid();
+
+            var job = PendingPrintJobs.Jobs.TryGetValue(jobId, out var info) ? info
+                    : (ActiveJobStore.Jobs.TryGetValue(jobId, out var active) ? active : null);
+            tenantId = job?.TenantId ?? _tenantContext.TenantId;
         }
 
-        var securePath = Path.Combine(Directory.GetCurrentDirectory(), "SecurePrints", $"{jobId}.pdf");
+        var securePath = Path.Combine(SecurePrintsPath.GetSecureDir(tenantId), $"{jobId}.pdf");
         if (!System.IO.File.Exists(securePath))
             return NotFound("Print job not found or expired.");
 
@@ -287,11 +327,13 @@ public class SecurePdfController : ControllerBase
 
         if (!string.IsNullOrEmpty(token))
         {
-            if (_printTokenService.ValidateToken(token, out int tid, out userId, out shopName, out userName))
+            if (_printTokenService.ValidateToken(token, out int tokenBookId, out int tokenTenantId, out userId, out shopName, out userName))
             {
-                book = await _db.Books.Include(b => b.Board).FirstOrDefaultAsync(b => b.Id == tid && b.IsActive);
+                book = await _db.Books.Include(b => b.Board).FirstOrDefaultAsync(b => b.Id == tokenBookId && b.IsActive);
                 if (book == null)
                     return NotFound();
+                if (book.TenantId != tokenTenantId)
+                    return NotFound();   // cross-tenant token rejected
             }
             else
             {
@@ -314,19 +356,20 @@ public class SecurePdfController : ControllerBase
         if (!System.IO.File.Exists(filePath))
             return NotFound("PDF file not found on server.");
 
-        _logger.LogInformation("Print request for book {BookId} by {UserName} (Shop: {ShopName})", bookId, userName, shopName);
+        _logger.LogInformation("Print request for book {BookId} (tenant {TenantId}) by {UserName} (Shop: {ShopName})", bookId, book.TenantId, userName, shopName);
 
         try
         {
+            var tenantName = await GetTenantNameAsync();
             var originalBytes = await System.IO.File.ReadAllBytesAsync(filePath);
             var watermarkEnabled = await _settingsService.IsWatermarkEnabledAsync();
             var watermarkText = await _settingsService.GetWatermarkTextAsync();
-            var watermarked = _watermarkService.ApplyWatermark(originalBytes, shopName, userName, DateTime.UtcNow, watermarkEnabled, watermarkText);
+            var watermarked = _watermarkService.ApplyWatermarkWithTenant(originalBytes, tenantName, shopName, userName, DateTime.UtcNow, watermarkEnabled, watermarkText);
             return File(new MemoryStream(watermarked), "application/pdf", enableRangeProcessing: false);
         }
         catch (Exception ex)
         {
-            // Security: fail CLOSED â€” never expose the unwatermarked file
+            // Security: fail CLOSED — never expose the unwatermarked file
             _logger.LogError(ex, "Watermarking failed for book {BookId}", bookId);
             return StatusCode(500, new { error = "Failed to process secure document." });
         }
@@ -343,61 +386,80 @@ public class SecurePdfController : ControllerBase
         var shop = user.ShopId != null ? await _db.Shops.FindAsync(user.ShopId.Value) : null;
         var shopName = shop?.Name ?? "Unknown Shop";
 
-        var token = _printTokenService.GenerateToken(bookId, user.Id, shopName, user.UserName ?? "Unknown");
+        var token = _printTokenService.GenerateToken(bookId, user.TenantId ?? 0, user.Id, shopName, user.UserName ?? "Unknown");
         return Ok(new { token, expiresInMinutes = 5 });
     }
 
+    // ── agent endpoints (API key → tenant) ──
+
     [HttpGet("print-agent/pending")]
     [AllowAnonymous]
-    public IActionResult GetPendingJobs()
+    public async Task<IActionResult> GetPendingJobs()
     {
-        if (!(User.Identity?.IsAuthenticated == true) && !IsValidAgentApiKey())
+        var key = HttpContext.Request.Headers["X-Api-Key"].FirstOrDefault();
+        var isUser = User.Identity?.IsAuthenticated == true;
+        var tenantId = 0;
+
+        if (!string.IsNullOrEmpty(key))
+            tenantId = await _apiKeys.ResolveTenantAsync(key);
+
+        if (tenantId == 0 && !isUser)
             return Unauthorized(new { error = "Authentication required." });
 
         var cutoff = DateTime.UtcNow.Add(-PendingPrintJobs.Expiry);
         var expired = PendingPrintJobs.Jobs.Where(kv => kv.Value.CreatedAt < cutoff).Select(kv => kv.Key).ToList();
-        foreach (var key in expired)
-            PendingPrintJobs.Jobs.TryRemove(key, out _);
+        foreach (var k in expired)
+            PendingPrintJobs.Jobs.TryRemove(k, out _);
 
-        var jobs = PendingPrintJobs.Jobs.Keys.ToList();
-        _logger.LogInformation("GetPendingJobs returning {Count} jobs", jobs.Count);
-        return Ok(new { jobs });
+        var jobs = PendingPrintJobs.Jobs
+            .Where(kv => ServeAllTenants || tenantId == 0 || kv.Value.TenantId == tenantId)
+            .Select(kv => kv.Key)
+            .ToList();
+
+        _logger.LogInformation("GetPendingJobs returning {Count} jobs for tenant {TenantId}", jobs.Count, tenantId);
+        return Ok(new { jobs, tenantId });
     }
 
     [HttpPost("print-agent/heartbeat")]
     [AllowAnonymous]
-    public IActionResult AgentHeartbeat([FromBody] AgentHeartbeatRequest? request)
+    public async Task<IActionResult> AgentHeartbeat([FromBody] AgentHeartbeatRequest? request)
     {
-        if (!IsValidAgentApiKey())
+        var key = HttpContext.Request.Headers["X-Api-Key"].FirstOrDefault();
+        if (string.IsNullOrEmpty(key) || await _apiKeys.ResolveTenantAsync(key) == 0)
             return Unauthorized(new { error = "Valid API key required." });
 
-        AgentStatusTracker.RecordHeartbeat(request?.Printers ?? new());
+        AgentStatusTracker.RecordHeartbeat(request?.Printers ?? new(), await _apiKeys.ResolveTenantAsync(key));
         return Ok(new { success = true });
     }
 
     [HttpGet("print-agent/status")]
     [AllowAnonymous]
-    public IActionResult AgentStatus()
+    public async Task<IActionResult> AgentStatus()
     {
         return Ok(AgentStatusTracker.GetStatus());
     }
 
     [HttpGet("print-agent/debug")]
     [AllowAnonymous]
-    public IActionResult DebugPending()
+    public async Task<IActionResult> DebugPending()
     {
-        if (!(User.Identity?.IsAuthenticated == true))
+        var isUser = User.Identity?.IsAuthenticated == true;
+        var key = HttpContext.Request.Headers["X-Api-Key"].FirstOrDefault();
+        var tenantId = !string.IsNullOrEmpty(key) ? await _apiKeys.ResolveTenantAsync(key) : 0;
+        if (!isUser && tenantId == 0)
             return Unauthorized(new { error = "Authentication required." });
+
         var now = DateTime.UtcNow;
         var cutoff = now.Add(-PendingPrintJobs.Expiry);
         return Ok(new
         {
             jobCount = PendingPrintJobs.Jobs.Count,
             expiryMinutes = PendingPrintJobs.Expiry.TotalMinutes,
-            now = now,
+            now,
             jobs = PendingPrintJobs.Jobs.Select(kv => new
             {
                 jobId = kv.Key,
+                tenantId = kv.Value.TenantId,
                 shopId = kv.Value.ShopId,
                 copies = kv.Value.Copies,
                 createdAt = kv.Value.CreatedAt,
@@ -408,15 +470,27 @@ public class SecurePdfController : ControllerBase
 
     [HttpPost("print-agent/claim/{jobId}")]
     [AllowAnonymous]
-    public IActionResult ClaimJob(string jobId)
+    public async Task<IActionResult> ClaimJob(string jobId)
     {
-        if (!IsValidAgentApiKey())
+        var key = HttpContext.Request.Headers["X-Api-Key"].FirstOrDefault();
+        var tenantId = !string.IsNullOrEmpty(key) ? await _apiKeys.ResolveTenantAsync(key) : 0;
+        if (tenantId == 0)
             return Unauthorized(new { error = "Valid API key required." });
 
         if (PendingPrintJobs.Jobs.TryRemove(jobId, out var info))
-            return Ok(new {
+        {
+            if (info.TenantId != tenantId && !ServeAllTenants)
+            {
+                PendingPrintJobs.Jobs.TryAdd(jobId, info); // restore — cross-tenant claim blocked
+                return StatusCode(403, new { success = false, error = "Job belongs to another tenant." });
+            }
+
+            ActiveJobStore.Jobs[jobId] = info; // remember for release/download
+            return Ok(new
+            {
                 success = true,
                 jobId,
+                tenantId = info.TenantId,
                 copies = info.Copies,
                 printerName = info.PrinterName,
                 paperSize = info.PaperSize ?? "A4",
@@ -429,29 +503,45 @@ public class SecurePdfController : ControllerBase
                 marginLeft = info.MarginLeft ?? 0,
                 marginRight = info.MarginRight ?? 0
             });
+        }
         return NotFound(new { success = false, error = "Job not found or already claimed." });
     }
 
     [HttpPost("print-agent/release/{jobId}")]
     [AllowAnonymous]
-    public IActionResult ReleaseJob(string jobId)
+    public async Task<IActionResult> ReleaseJob(string jobId)
     {
-        if (!IsValidAgentApiKey())
+        var key = HttpContext.Request.Headers["X-Api-Key"].FirstOrDefault();
+        var tenantId = !string.IsNullOrEmpty(key) ? await _apiKeys.ResolveTenantAsync(key) : 0;
+        if (tenantId == 0)
             return Unauthorized(new { error = "Valid API key required." });
 
-        // Only re-add if not already in the queue
-        if (!PendingPrintJobs.Jobs.ContainsKey(jobId))
+        // Only re-add if not already in the queue — reuse the claimed info (incl. TenantId + settings)
+        if (!PendingPrintJobs.Jobs.ContainsKey(jobId) && ActiveJobStore.Jobs.TryRemove(jobId, out var info))
         {
-            PendingPrintJobs.Jobs.TryAdd(jobId, new PendingJobInfo
-            {
-                ShopId = 0,
-                Copies = 1,
-                CreatedAt = DateTime.UtcNow
-            });
+            if (info.TenantId != tenantId && !ServeAllTenants)
+                return StatusCode(403, new { success = false, error = "Job belongs to another tenant." });
+
+            info.CreatedAt = DateTime.UtcNow; // restart expiry clock
+            PendingPrintJobs.Jobs.TryAdd(jobId, info);
             return Ok(new { success = true, message = "Job returned to pending queue." });
         }
         return Ok(new { success = true, message = "Job already in queue." });
     }
+
+    private async Task<string> GetTenantNameAsync()
+    {
+        var tid = _tenantContext.TenantId;
+        if (tid <= 0) return "";
+        var tenant = await _db.Tenants.AsNoTracking().FirstOrDefaultAsync(t => t.Id == tid);
+        return tenant?.Name ?? "";
+    }
+}
+
+public static class SecurePrintsPath
+{
+    public static string GetSecureDir(int tenantId)
+        => Path.Combine(Directory.GetCurrentDirectory(), "SecurePrints", tenantId.ToString());
 }
 
 public class ProcessPrintRequest
@@ -475,6 +565,7 @@ public class ProcessPrintRequest
 
 public class PendingJobInfo
 {
+    public int TenantId { get; set; }          // NEW — required
     public int ShopId { get; set; }
     public int Copies { get; set; }
     public DateTime CreatedAt { get; set; }
@@ -490,6 +581,12 @@ public class PendingJobInfo
     public double? MarginRight { get; set; }
 }
 
+/// <summary>Jobs claimed by an agent but not yet downloaded/deleted — used to restore on release (§7.3).</summary>
+public static class ActiveJobStore
+{
+    public static System.Collections.Concurrent.ConcurrentDictionary<string, PendingJobInfo> Jobs = new();
+}
+
 public static class PendingPrintJobs
 {
     public static System.Collections.Concurrent.ConcurrentDictionary<string, PendingJobInfo> Jobs = new();
@@ -500,14 +597,16 @@ public static class AgentStatusTracker
 {
     private static DateTime _lastSeen = DateTime.MinValue;
     private static List<AgentPrinterInfo> _printers = new();
+    private static int _tenantId;
     private static readonly object _lock = new();
 
-    public static void RecordHeartbeat(List<AgentPrinterInfo> printers)
+    public static void RecordHeartbeat(List<AgentPrinterInfo> printers, int tenantId)
     {
         lock (_lock)
         {
             _lastSeen = DateTime.UtcNow;
             _printers = printers ?? new();
+            _tenantId = tenantId;
         }
     }
 
@@ -521,6 +620,7 @@ public static class AgentStatusTracker
             {
                 connected = IsConnected,
                 lastSeen = _lastSeen == DateTime.MinValue ? (string?)null : _lastSeen.ToString("O"),
+                tenantId = _tenantId,
                 printers = _printers
             };
         }

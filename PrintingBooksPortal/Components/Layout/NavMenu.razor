@@ -98,16 +98,25 @@
 
     private static readonly NavGroup[] NavGroups =
     [
-        new("Admin",
+        new("Teacher,SystemAdmin",
         [
             new("Dashboard", "/admin/dashboard", SvgIcons.Dashboard),
             new("Boards", "/admin/boards", SvgIcons.Boards),
             new("Books", "/admin/books", SvgIcons.Books),
             new("Shops", "/admin/shops", SvgIcons.Shops),
             new("Book Access", "/admin/assignments", SvgIcons.BookAccess),
-            new("Users", "/admin/users", SvgIcons.Users),
             new("Analytics", "/admin/analytics", SvgIcons.Analytics),
             new("Settings", "/admin/settings", SvgIcons.Settings),
+        ]),
+        new("Admin,SystemAdmin",
+        [
+            new("Users", "/admin/users", SvgIcons.Users),
+        ]),
+        new("SystemAdmin",
+        [
+            new("Platform Dashboard", "/sa/dashboard", SvgIcons.Dashboard),
+            new("Teachers", "/sa/teachers", SvgIcons.Users),
+            new("Platform Analytics", "/sa/analytics", SvgIcons.Analytics),
         ]),
         new("Shop",
         [

@@ -1,17 +1,6 @@
 (function () {
     'use strict';
 
-    document.addEventListener('contextmenu', function (e) {
-        e.preventDefault();
-    });
-
-    document.addEventListener('keydown', function (e) {
-        var ctrl = e.ctrlKey || e.metaKey;
-        var key = (e.key || '').toLowerCase();
-        if ((ctrl && (key === 's' || key === 'p' || key === 'u')) || e.key === 'F12' || e.keyCode === 123) { e.preventDefault(); e.stopPropagation(); return; }
-        if (ctrl && e.shiftKey && (key === 'i' || key === 'j' || key === 'c' || key === 'u')) { e.preventDefault(); e.stopPropagation(); return; }
-    }, true);
-
     document.addEventListener('dragstart', function (e) {
         if (e.target && typeof e.target.closest === 'function' && e.target.closest('.pdf-container')) e.preventDefault();
     });
@@ -26,6 +15,7 @@
     var pendingRender = {};
     var observer = null;
     var currentScale = 1.5;
+    var outsideClickHandler = null;
 
     // Print settings state
     var settings = {
@@ -95,11 +85,16 @@
                 e.stopPropagation();
                 panel.classList.toggle('open');
             });
-            document.addEventListener('click', function (e) {
-                if (!document.getElementById('printSettingsGroup').contains(e.target)) {
+            if (outsideClickHandler) document.removeEventListener('click', outsideClickHandler);
+            outsideClickHandler = function (e) {
+                // The settings group may no longer be in the DOM (e.g. after a
+                // print job is accepted and the page re-renders) — guard against null.
+                var group = document.getElementById('printSettingsGroup');
+                if (!group || !group.contains(e.target)) {
                     panel.classList.remove('open');
                 }
-            });
+            };
+            document.addEventListener('click', outsideClickHandler);
         }
 
         // ─── Printer ───

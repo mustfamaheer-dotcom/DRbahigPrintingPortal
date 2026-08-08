@@ -33,6 +33,31 @@ public class WatermarkService : IWatermarkService
             .Replace("{date}", timestamp.ToString("yyyy-MM-dd HH:mm"))
             .Replace("{timestamp}", timestamp.ToString("yyyy-MM-dd HH:mm:ss"));
 
+        return ApplyWatermarkCore(pdfBytes, watermarkText);
+    }
+
+    public byte[] ApplyWatermarkWithTenant(byte[] pdfBytes, string tenantName, string shopName, string userName, DateTime timestamp, bool enabled, string? customText)
+    {
+        if (!enabled)
+        {
+            return pdfBytes;
+        }
+
+        string watermarkText = customText ?? $"LICENSED TO: {tenantName} / {shopName}\nUSER: {userName}\nDATE: {timestamp:yyyy-MM-dd HH:mm}\nDO NOT DISTRIBUTE";
+
+        // Replace placeholders
+        watermarkText = watermarkText
+            .Replace("{tenantName}", string.IsNullOrEmpty(tenantName) ? "NA" : tenantName)
+            .Replace("{shopName}", shopName)
+            .Replace("{userName}", userName)
+            .Replace("{date}", timestamp.ToString("yyyy-MM-dd HH:mm"))
+            .Replace("{timestamp}", timestamp.ToString("yyyy-MM-dd HH:mm:ss"));
+
+        return ApplyWatermarkCore(pdfBytes, watermarkText);
+    }
+
+    private static byte[] ApplyWatermarkCore(byte[] pdfBytes, string watermarkText)
+    {
         using var inputStream = new MemoryStream(pdfBytes);
         using var document = PdfReader.Open(inputStream, PdfDocumentOpenMode.Modify);
 

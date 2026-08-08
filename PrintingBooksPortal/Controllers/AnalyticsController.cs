@@ -7,7 +7,7 @@ namespace PrintingBooksPortal.Controllers;
 
 [ApiController]
 [Route("api/analytics")]
-[Authorize(Roles = "Admin")]
+[Authorize(Roles = "Teacher,SystemAdmin")]
 public class AnalyticsController : ControllerBase
 {
     private readonly AppDbContext _db;

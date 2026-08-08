@@ -28,6 +28,9 @@ public class PrintLog
 
     public DateTime PrintedAt { get; set; } = DateTime.UtcNow;
 
+    public int TenantId { get; set; }
+    public Tenant? Tenant { get; set; }
+
     public Shop Shop { get; set; } = null!;
     public Book Book { get; set; } = null!;
 }
